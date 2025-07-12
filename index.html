@@ -291,16 +291,18 @@
     </div>
   </footer>
 
-        <!-- ==================== JAVASCRIPT ==================== -->
+    <!-- ==================== JAVASCRIPT ==================== -->
   <script>
-    // ==================== MOBILE CHAT WIDGET ====================
+    // ==================== GLOBAL VARIABLES ====================
     let mobileChat = {
       isOpen: false,
       hasNewMessage: false,
-      messageHistory: [],
       isInitialized: false
     };
 
+    let chatSyncEnabled = true;
+
+    // ==================== MOBILE CHAT WIDGET ====================
     function openMobileChat() {
       const overlay = document.getElementById('chat-overlay');
       const chatMobile = document.getElementById('chat-mobile');
@@ -322,9 +324,9 @@
           setTimeout(() => mobileInput.focus(), 300);
         }
         
-        // Inizializza solo se non è mai stato fatto
+        // Sincronizza messaggi da desktop a mobile
         if (!mobileChat.isInitialized) {
-          syncMessagesToMobile();
+          syncDesktopToMobile();
           mobileChat.isInitialized = true;
         }
         
@@ -352,6 +354,7 @@
       }
     }
 
+    // ==================== UNIFIED MESSAGE SYSTEM ====================
     async function sendMobileMessage() {
       const mobileInput = document.getElementById('mobile-user-input');
       const message = mobileInput.value.trim();
@@ -360,180 +363,213 @@
       
       mobileInput.value = '';
       
-      // Aggiungi messaggio utente
-      await appendMobileMessage('user', message);
+      // Disabilita sync temporaneamente per evitare duplicati
+      chatSyncEnabled = false;
       
-      // Mostra typing indicator
-      showMobileTyping();
-      
-      try {
-        // Attendi che chat.js sia caricato
-        if (typeof window.generateAIResponse === 'function') {
-          const response = await window.generateAIResponse(message);
-          hideMobileTyping();
-          await appendMobileMessage('bot', response);
+      // Usa la stessa funzione del desktop attraverso chat.js
+      if (typeof window.sendMessage === 'function') {
+        // Imposta il messaggio nell'input desktop
+        const desktopInput = document.getElementById('user-input');
+        if (desktopInput) {
+          desktopInput.value = message;
           
-          // Setup GDPR button se presente
-          if (response.includes('gdpr-accept-btn') && typeof window.setupGDPRButton === 'function') {
-            window.setupGDPRButton();
-          }
-        } else {
-          // Aspetta che chat.js si carichi
-          let attempts = 0;
-          const waitForChatJS = setInterval(async () => {
-            attempts++;
-            if (typeof window.generateAIResponse === 'function') {
-              clearInterval(waitForChatJS);
-              try {
-                const response = await window.generateAIResponse(message);
-                hideMobileTyping();
-                await appendMobileMessage('bot', response);
-                
-                if (response.includes('gdpr-accept-btn') && typeof window.setupGDPRButton === 'function') {
-                  window.setupGDPRButton();
-                }
-              } catch (error) {
-                hideMobileTyping();
-                await appendMobileMessage('bot', '⚠️ Si è verificato un errore. Riprova più tardi.');
-              }
-            } else if (attempts > 10) {
-              clearInterval(waitForChatJS);
-              hideMobileTyping();
-              await appendMobileMessage('bot', '⚠️ Servizio temporaneamente non disponibile. Riprova più tardi.');
-            }
-          }, 500);
+          // Chiama la funzione unificata di chat.js
+          await window.sendMessage();
+          
+          // Pulisci l'input desktop
+          desktopInput.value = '';
         }
-      } catch (error) {
-        console.error('Errore invio messaggio mobile:', error);
-        hideMobileTyping();
-        await appendMobileMessage('bot', '⚠️ Si è verificato un errore. Riprova più tardi.');
-      }
-    }
-
-    function showMobileTyping() {
-      const chatBody = document.getElementById('chat-mobile-body');
-      if (!chatBody) return;
-      
-      // Rimuovi eventuali typing indicator esistenti
-      const existingTyping = document.getElementById('mobile-typing-indicator');
-      if (existingTyping) {
-        existingTyping.remove();
+      } else {
+        // Fallback se chat.js non è ancora caricato
+        await waitForChatJSAndSend(message);
       }
       
-      const typingDiv = document.createElement('div');
-      typingDiv.className = 'message bot typing-indicator';
-      typingDiv.id = 'mobile-typing-indicator';
-      typingDiv.innerHTML = `
-        <div class="typing-animation">
-          <span></span><span></span><span></span>
-        </div>
-      `;
-      
-      chatBody.appendChild(typingDiv);
-      chatBody.scrollTop = chatBody.scrollHeight;
+      // Riabilita sync
+      setTimeout(() => {
+        chatSyncEnabled = true;
+      }, 100);
     }
 
-    function hideMobileTyping() {
-      const typingIndicator = document.getElementById('mobile-typing-indicator');
-      if (typingIndicator) {
-        typingIndicator.remove();
+    async function waitForChatJSAndSend(message) {
+      let attempts = 0;
+      const maxAttempts = 20;
+      
+      const waitInterval = setInterval(async () => {
+        attempts++;
+        
+        if (typeof window.sendMessage === 'function') {
+          clearInterval(waitInterval);
+          
+          const desktopInput = document.getElementById('user-input');
+          if (desktopInput) {
+            desktopInput.value = message;
+            await window.sendMessage();
+            desktopInput.value = '';
+          }
+        } else if (attempts >= maxAttempts) {
+          clearInterval(waitInterval);
+          
+          // Messaggio di errore unificato
+          await appendUnifiedMessage('bot', '⚠️ Servizio temporaneamente non disponibile. Riprova più tardi.');
+        }
+      }, 250);
+    }
+
+    // ==================== UNIFIED MESSAGE APPEND ====================
+    async function appendUnifiedMessage(type, message) {
+      if (!chatSyncEnabled) return;
+      
+      // Aggiungi al desktop
+      const desktopChatBody = document.getElementById('chat-body');
+      if (desktopChatBody) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}`;
+        messageDiv.innerHTML = message;
+        
+        desktopChatBody.appendChild(messageDiv);
+        desktopChatBody.scrollTop = desktopChatBody.scrollHeight;
       }
+      
+      // Aggiungi al mobile se è aperto
+      if (mobileChat.isOpen) {
+        const mobileChatBody = document.getElementById('chat-mobile-body');
+        if (mobileChatBody) {
+          const messageDiv = document.createElement('div');
+          messageDiv.className = `message ${type}`;
+          messageDiv.innerHTML = message;
+          
+          mobileChatBody.appendChild(messageDiv);
+          mobileChatBody.scrollTop = mobileChatBody.scrollHeight;
+        }
+      }
+      
+      console.log(`💬 Messaggio ${type} aggiunto (Sistema Unificato)`);
     }
 
-    async function appendMobileMessage(type, message) {
-      const chatBody = document.getElementById('chat-mobile-body');
-      if (!chatBody) return;
-      
-      const messageDiv = document.createElement('div');
-      messageDiv.className = `message ${type}`;
-      messageDiv.innerHTML = message;
-      
-      chatBody.appendChild(messageDiv);
-      chatBody.scrollTop = chatBody.scrollHeight;
-      
-      mobileChat.messageHistory.push({ type, message });
-      
-      console.log(`📱 Messaggio ${type} aggiunto alla chat mobile`);
-    }
-
-    async function syncMessagesToMobile() {
+    // ==================== DESKTOP TO MOBILE SYNC ====================
+    function syncDesktopToMobile() {
       const desktopChatBody = document.getElementById('chat-body');
       const mobileChatBody = document.getElementById('chat-mobile-body');
       
-      if (desktopChatBody && mobileChatBody && desktopChatBody.children.length > 0) {
-        // Se ci sono messaggi desktop, copiali
-        const messages = desktopChatBody.querySelectorAll('.message');
+      if (!desktopChatBody || !mobileChatBody) return;
+      
+      // Pulisci chat mobile
+      mobileChatBody.innerHTML = '';
+      
+      // Copia tutti i messaggi dal desktop al mobile
+      const desktopMessages = desktopChatBody.querySelectorAll('.message');
+      
+      desktopMessages.forEach(msg => {
+        const clonedMsg = msg.cloneNode(true);
+        mobileChatBody.appendChild(clonedMsg);
+      });
+      
+      // Scroll in fondo
+      mobileChatBody.scrollTop = mobileChatBody.scrollHeight;
+      
+      // Riattiva event listeners per pulsanti clonati
+      setTimeout(() => {
+        setupClonedButtonListeners(mobileChatBody);
+      }, 100);
+      
+      console.log('✅ Chat desktop sincronizzata con mobile');
+    }
+
+    // ==================== MOBILE TO DESKTOP SYNC ====================
+    function syncMobileToDesktop() {
+      const desktopChatBody = document.getElementById('chat-body');
+      const mobileChatBody = document.getElementById('chat-mobile-body');
+      
+      if (!desktopChatBody || !mobileChatBody || !mobileChat.isOpen) return;
+      
+      // Conta messaggi attuali
+      const desktopMsgCount = desktopChatBody.children.length;
+      const mobileMsgCount = mobileChatBody.children.length;
+      
+      // Se mobile ha più messaggi, sincronizza
+      if (mobileMsgCount > desktopMsgCount) {
+        const newMessages = Array.from(mobileChatBody.children).slice(desktopMsgCount);
         
-        mobileChatBody.innerHTML = '';
-        
-        messages.forEach(msg => {
-          const newMsg = msg.cloneNode(true);
-          mobileChatBody.appendChild(newMsg);
+        newMessages.forEach(msg => {
+          const clonedMsg = msg.cloneNode(true);
+          desktopChatBody.appendChild(clonedMsg);
         });
         
-        mobileChatBody.scrollTop = mobileChatBody.scrollHeight;
-        console.log('✅ Messaggi sincronizzati con chat mobile');
-      } else {
-        // Messaggio di benvenuto semplice
-        const studioNome = document.getElementById('studio-name')?.textContent || 'Studio Dentistico Demo';
-        const welcomeMsg = `👋 Ciao! Sono l'assistente digitale di ${studioNome}. Come posso aiutarti oggi?`;
-        
-        await appendMobileMessage('bot', welcomeMsg);
-        
-        // Aspetta 2 secondi e mostra i pulsanti
-        setTimeout(() => {
-          if (typeof window.showInitialOptions === 'function') {
-            try {
-              // La funzione showInitialOptions aggiungerà i pulsanti automaticamente
-              window.showInitialOptions();
-            } catch (error) {
-              console.error('Errore showInitialOptions:', error);
-              showFallbackButtons();
+        desktopChatBody.scrollTop = desktopChatBody.scrollHeight;
+        console.log('✅ Chat mobile sincronizzata con desktop');
+      }
+    }
+
+    // ==================== BUTTON LISTENERS SETUP ====================
+    function setupClonedButtonListeners(container) {
+      // Setup pulsanti opzione
+      const optionButtons = container.querySelectorAll('.chat-option-btn[data-action]');
+      optionButtons.forEach(btn => {
+        if (!btn.hasAttribute('data-mobile-listener')) {
+          btn.setAttribute('data-mobile-listener', 'true');
+          btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const action = this.getAttribute('data-action');
+            if (action && typeof window.handleQuickOption === 'function') {
+              window.handleQuickOption(action);
             }
-          } else {
-            console.log('showInitialOptions non disponibile, uso fallback');
-            showFallbackButtons();
-          }
-        }, 2000);
-      }
-    }
-
-    function showFallbackButtons() {
-      const welcomeMessage = `
-        <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-          <button class="chat-option-btn" onclick="selectChatOption('info')">📋 Informazioni Studio</button>
-          <button class="chat-option-btn" onclick="selectChatOption('orari')">⏰ Orari e Disponibilità</button>
-          <button class="chat-option-btn" onclick="selectChatOption('prenotazione')">📅 Prenota Visita</button>
-          <button class="chat-option-btn" onclick="selectChatOption('contatti')">📞 Contatti</button>
-        </div>
-      `;
-      appendMobileMessage('bot', welcomeMessage);
-    }
-
-    function selectChatOption(option) {
-      const options = {
-        'info': 'Dimmi informazioni sullo studio',
-        'orari': 'Quali sono gli orari di apertura?',
-        'prenotazione': 'Vorrei prenotare una visita',
-        'contatti': 'Come posso contattare lo studio?'
-      };
-      
-      if (options[option]) {
-        // Simula input utente e invia tramite sendMobileMessage
-        const mobileInput = document.getElementById('mobile-user-input');
-        if (mobileInput) {
-          mobileInput.value = options[option];
-          sendMobileMessage();
+          });
         }
-      }
+      });
+      
+      // Setup pulsanti GDPR
+      const gdprButtons = container.querySelectorAll('#gdpr-accept-btn');
+      gdprButtons.forEach(btn => {
+        if (!btn.hasAttribute('data-mobile-listener')) {
+          btn.setAttribute('data-mobile-listener', 'true');
+          btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (typeof window.acceptGDPR === 'function') {
+              window.acceptGDPR();
+            }
+          });
+        }
+      });
     }
 
-    function showMobileNotification() {
-      const notification = document.getElementById('chat-notification');
-      if (notification && !mobileChat.isOpen && window.innerWidth <= 768) {
-        notification.style.display = 'flex';
-        mobileChat.hasNewMessage = true;
-      }
+    // ==================== CHAT INITIALIZATION OVERRIDE ====================
+    // Override della funzione appendMessage di chat.js per sincronizzazione
+    function interceptChatJSAppendMessage() {
+      // Attendi che chat.js sia caricato
+      const checkInterval = setInterval(() => {
+        if (window.appendMessage && typeof window.appendMessage === 'function') {
+          clearInterval(checkInterval);
+          
+          // Salva la funzione originale
+          const originalAppendMessage = window.appendMessage;
+          
+          // Override con sincronizzazione
+          window.appendMessage = async function(type, message) {
+            // Chiama la funzione originale
+            await originalAppendMessage(type, message);
+            
+            // Sincronizza con mobile se è aperto
+            if (mobileChat.isOpen && chatSyncEnabled) {
+              const mobileChatBody = document.getElementById('chat-mobile-body');
+              if (mobileChatBody) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${type}`;
+                messageDiv.innerHTML = message;
+                
+                mobileChatBody.appendChild(messageDiv);
+                mobileChatBody.scrollTop = mobileChatBody.scrollHeight;
+                
+                // Setup listeners per eventuali pulsanti
+                setTimeout(() => {
+                  setupClonedButtonListeners(mobileChatBody);
+                }, 100);
+              }
+            }
+          };
+          
+          console.log('✅ Intercettazione appendMessage attivata');
+        }
+      }, 100);
     }
 
     // ==================== RESPONSIVE CHAT DETECTION ====================
@@ -614,20 +650,34 @@
     function handleEnterKey(event) {
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
-        sendMessage();
+        // Usa la funzione unificata da chat.js
+        if (typeof window.sendMessage === 'function') {
+          window.sendMessage();
+        }
       }
     }
 
     function sendMessage() {
-      console.log('📧 Invio messaggio desktop...');
-      // Implementazione in chat.js
+      // Questa funzione viene sovrascritta da chat.js
+      console.log('📧 Invio messaggio desktop - delegando a chat.js...');
+    }
+
+    function showMobileNotification() {
+      const notification = document.getElementById('chat-notification');
+      if (notification && !mobileChat.isOpen && window.innerWidth <= 768) {
+        notification.style.display = 'flex';
+        mobileChat.hasNewMessage = true;
+      }
     }
 
     // ==================== EVENT LISTENERS ====================
     document.addEventListener('DOMContentLoaded', function() {
-      console.log('🚀 DOM caricato, inizializzazione...');
+      console.log('🚀 DOM caricato, inizializzazione sistema unificato...');
       
       detectMobileChat();
+      
+      // Intercetta appendMessage di chat.js per sincronizzazione
+      interceptChatJSAppendMessage();
       
       const overlay = document.getElementById('overlay-bg');
       if (overlay) {
@@ -660,7 +710,7 @@
         setTimeout(showMobileNotification, 3000);
       }
 
-      console.log('✅ Event listeners inizializzati');
+      console.log('✅ Sistema unificato inizializzato');
     });
 
     window.addEventListener('resize', function() {
@@ -676,8 +726,10 @@
 
     window.addEventListener('error', function(e) {
       console.error('❌ Errore JavaScript:', e.error);
+      
+      // Mostra errore su entrambe le chat
       if (mobileChat.isOpen) {
-        appendMobileMessage('bot', '⚠️ Si è verificato un errore. Riprova più tardi.');
+        appendUnifiedMessage('bot', '⚠️ Si è verificato un errore. Riprova più tardi.');
       }
     });
 
@@ -699,10 +751,9 @@
     window.mobileChat = mobileChat;
     window.openMobileChat = openMobileChat;
     window.closeMobileChat = closeMobileChat;
-    window.appendMobileMessage = appendMobileMessage;
-    window.selectChatOption = selectChatOption;
-    window.showMobileTyping = showMobileTyping;
-    window.hideMobileTyping = hideMobileTyping;
+    window.appendUnifiedMessage = appendUnifiedMessage;
+    window.syncDesktopToMobile = syncDesktopToMobile;
+    window.syncMobileToDesktop = syncMobileToDesktop;
   </script>
   
   <!-- ==================== EXTERNAL SCRIPTS ==================== -->
