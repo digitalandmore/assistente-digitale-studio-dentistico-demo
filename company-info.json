@@ -1,0 +1,201 @@
+{
+  "studio": {
+    "nome": "Studio Dentistico Demo",
+    "indirizzo": "Via dei Dentisti 10, Milano (MI)",
+    "telefono": "+39 123 456 7890",
+    "email": "info@studiodemo.it",
+    "sito": "www.studiodemo.it",
+    "whatsapp": "+39 123 456 7890",
+    "piva": "01234567890",
+    "albo": "MI-123456",
+    "descrizione": "Lo Studio Dentistico Demo offre soluzioni odontoiatriche di qualità con tecnologie moderne, attenzione al paziente e cura personalizzata.",
+    "storia": "Dal 2005 ci prendiamo cura del sorriso dei nostri pazienti, con uno staff specializzato e costantemente aggiornato.",
+    "logo": "images/logo.png",
+    "foto_studio": [
+      "images/1.jpg",
+      "images/2.jpg", 
+      "images/3.jpg"
+    ]
+  },
+  "orari": {
+    "lunedi_venerdi": "09:00 - 18:00",
+    "sabato": "09:00 - 13:00",
+    "domenica": "Chiuso",
+    "note": "Gli orari potrebbero variare durante le festività. Contattaci per conferme su date specifiche."
+  },
+  "ferie_programmate": {
+    "ferie_estive": {
+      "tipo": "periodo_fisso",
+      "inizio": {
+        "mese": 8,
+        "giorno": 1
+      },
+      "fine": {
+        "mese": 8,
+        "giorno": 14
+      },
+      "descrizione": "Ferie estive annuali",
+      "nota": "Il 15 agosto (Ferragosto) è sempre chiuso. Riapertura il 16 agosto."
+    },
+    "ferie_natalizie": {
+      "tipo": "periodo_variabile",
+      "descrizione": "Chiusura natalizia dal 24 dicembre al 6 gennaio",
+      "note": "Date specifiche comunicate annualmente"
+    }
+  },
+  "festivita_italiane": {
+    "capodanno": {
+      "mese": 1,
+      "giorno": 1,
+      "nome": "Capodanno",
+      "status": "chiuso"
+    },
+    "epifania": {
+      "mese": 1,
+      "giorno": 6,
+      "nome": "Epifania",
+      "status": "chiuso"
+    },
+    "festa_liberazione": {
+      "mese": 4,
+      "giorno": 25,
+      "nome": "Festa della Liberazione",
+      "status": "chiuso"
+    },
+    "festa_lavoro": {
+      "mese": 5,
+      "giorno": 1,
+      "nome": "Festa del Lavoro",
+      "status": "chiuso"
+    },
+    "festa_repubblica": {
+      "mese": 6,
+      "giorno": 2,
+      "nome": "Festa della Repubblica",
+      "status": "chiuso"
+    },
+    "ferragosto": {
+      "mese": 8,
+      "giorno": 15,
+      "nome": "Ferragosto",
+      "status": "chiuso"
+    },
+    "ognissanti": {
+      "mese": 11,
+      "giorno": 1,
+      "nome": "Ognissanti",
+      "status": "chiuso"
+    },
+    "immacolata": {
+      "mese": 12,
+      "giorno": 8,
+      "nome": "Immacolata Concezione",
+      "status": "chiuso"
+    },
+    "natale": {
+      "mese": 12,
+      "giorno": 25,
+      "nome": "Natale",
+      "status": "chiuso"
+    },
+    "santo_stefano": {
+      "mese": 12,
+      "giorno": 26,
+      "nome": "Santo Stefano",
+      "status": "chiuso"
+    }
+  },
+  "orari_speciali": {
+    "vigilia_natale": {
+      "mese": 12,
+      "giorno": 24,
+      "orario": "09:00 - 13:00",
+      "nome": "Vigilia di Natale"
+    },
+    "vigilia_capodanno": {
+      "mese": 12,
+      "giorno": 31,
+      "orario": "09:00 - 13:00",
+      "nome": "Vigilia di Capodanno"
+    }
+  },
+  "servizi": {
+    "igiene_orale": {
+      "nome": "Igiene Orale",
+      "descrizione": "Prevenzione e detartrasi per mantenere denti e gengive sani",
+      "icona": "fas fa-tooth",
+      "disponibile": true
+    },
+    "implantologia": {
+      "nome": "Implantologia",
+      "descrizione": "Sostituzione di denti mancanti con impianti sicuri e duraturi",
+      "icona": "fas fa-screwdriver-wrench",
+      "disponibile": true
+    },
+    "ortodonzia": {
+      "nome": "Ortodonzia", 
+      "descrizione": "Apparecchi per l'allineamento dentale in adulti e bambini",
+      "icona": "fas fa-teeth",
+      "disponibile": true
+    },
+    "estetica_dentale": {
+      "nome": "Estetica Dentale",
+      "descrizione": "Trattamenti per migliorare il sorriso: sbiancamento, faccette e altro",
+      "icona": "fas fa-smile",
+      "disponibile": true,
+      "dettagli": {
+        "faccette": "Faccette in ceramica per correggere imperfezioni estetiche",
+        "sbiancamento": "Sbiancamento professionale per denti più bianchi",
+        "composite": "Ricostruzioni estetiche in materiale composito"
+      }
+    },
+    "endodonzia": {
+      "nome": "Endodonzia",
+      "descrizione": "Terapia canalare avanzata per salvare denti compromessi",
+      "icona": "fas fa-x-ray",
+      "disponibile": true
+    },
+    "parodontologia": {
+      "nome": "Parodontologia",
+      "descrizione": "Diagnosi e cura di gengiviti, parodontiti e patologie gengivali",
+      "icona": "fas fa-heartbeat",
+      "disponibile": true
+    }
+  },
+  "offerte": {
+    "igiene_speciale": {
+      "nome": "Offerta Speciale: Igiene Orale",
+      "descrizione": "Prenota ora una pulizia completa e ricevi il 20% di sconto sulla prossima visita!",
+      "scadenza": "31/07/2025",
+      "icona": "🎁",
+      "attiva": true
+    }
+  },
+  "team": {
+    "descrizione": "Un'equipe multidisciplinare composta da dentisti, igienisti e assistenti pronti ad accoglierti con professionalità e cortesia."
+  },
+  "contatti": {
+    "telefono": {
+      "numero": "+39 123 456 7890",
+      "link": "tel:+391234567890"
+    },
+    "email": {
+      "indirizzo": "info@studiodemo.it",
+      "link": "mailto:info@studiodemo.it"
+    },
+    "whatsapp": {
+      "numero": "+39 123 456 7890",
+      "link": "https://wa.me/391234567890"
+    },
+    "sito_web": {
+      "url": "www.studiodemo.it",
+      "link": "https://www.studiodemo.it"
+    }
+  },
+  "social_media": [],
+  "info_legali": {
+    "ragione_sociale": "Studio Dentistico Demo SRL",
+    "piva": "01234567890",
+    "albo": "Iscrizione Albo Medici Odontoiatri: MI-123456"
+  }
+}

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assistente Digitale - Studio Demo</title>
+  <meta name="description" content="Assistente digitale per Studio Dentistico Demo - Informazioni, orari, contatti e prenotazioni online">
+  <meta name="keywords" content="dentista, studio dentistico, assistente digitale, prenotazioni online">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="images/logo.png">
+</head>
+<body>
+  <!-- ==================== OVERLAY BACKGROUND ==================== -->
+  <div id="overlay-bg"></div>
+
+  <!-- ==================== MAIN CONTENT ==================== -->
+  <div class="main-content">
+    
+    <!-- ==================== SIDEBAR ==================== -->
+    <div class="sidebar">
+      
+      <!-- Branding Section -->
+      <div class="branding">
+        <img src="images/logo.png" alt="Logo Studio" class="logo">
+        <div class="studio-name" id="studio-name">Studio Dentistico Demo</div>
+        <div class="studio-site" id="studio-site">www.studiodemo.it</div>
+        <div class="photos">
+          <img src="images/1.jpg" alt="Foto Studio 1" onclick="openPopup('popup-gallery')" loading="lazy">
+          <img src="images/2.jpg" alt="Foto Studio 2" onclick="openPopup('popup-gallery')" loading="lazy">
+          <img src="images/3.jpg" alt="Foto Studio 3" onclick="openPopup('popup-gallery')" loading="lazy">
+          <div class="more" onclick="openPopup('popup-gallery')" title="Visualizza tutte le foto">
+            <i class="fas fa-images"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Promo Section -->
+      <div class="promo" id="promo-section">
+        <h4>🎁 Offerta Speciale: Igiene Orale</h4>
+        <p class="scadenza">Valida fino al <strong>31 Luglio 2025</strong></p>
+        <p class="descrizione">Prenota ora una pulizia completa e ricevi il <strong>20% di sconto</strong> sulla prossima visita!</p>
+      </div>
+
+      <!-- Info Buttons -->
+      <div class="info-buttons">
+        <button onclick="openPopup('popup-info-studio')" aria-label="Informazioni sullo Studio">
+          <i class="fas fa-info-circle"></i> Informazioni sullo Studio
+        </button>
+        <button onclick="openPopup('popup-specializzazioni')" aria-label="Specializzazioni odontoiatriche">
+          <i class="fas fa-tooth"></i> Specializzazioni odontoiatriche
+        </button>
+        <button onclick="openPopup('popup-orari')" aria-label="Orari dello studio">
+          <i class="fas fa-clock"></i> Orari dello studio
+        </button>
+        <button onclick="openPopup('popup-supporto')" aria-label="Assistenza e contatti">
+          <i class="fas fa-headset"></i> Assistenza e contatti
+        </button>
+        <button onclick="openPopup('popup-location')" aria-label="Dove trovarci">
+          <i class="fas fa-map-marker-alt"></i> Dove trovarci
+        </button>
+      </div>
+    </div>
+
+    <!-- ==================== CHAT WINDOW ==================== -->
+    <div class="chat-window">
+      <div class="chat-header">
+        <img src="images/logo.png" alt="Logo Studio">
+        <span id="chat-title">Assistente Digitale - Studio Demo</span>
+      </div>
+      <div class="chat-body" id="chat-body">
+        <!-- Messaggi chat caricati dinamicamente -->
+      </div>
+      <div class="chat-input">
+        <input type="text" 
+               id="user-input" 
+               placeholder="Scrivi qui la tua domanda..." 
+               maxlength="500"
+               autocomplete="off"
+               onkeypress="handleEnterKey(event)">
+        <button onclick="sendMessage()" 
+                id="send-button"
+                aria-label="Invia messaggio"
+                title="Invia messaggio">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== POPUP: INFORMAZIONI STUDIO ==================== -->
+  <div id="popup-info-studio" class="info-popup" role="dialog" aria-labelledby="popup-studio-title" aria-modal="true">
+    <h3 id="popup-studio-title">
+      <img src="images/logo.png" alt="Logo Studio" style="width: 28px; height: 28px; border-radius: 50%; vertical-align: middle; margin-right: 10px;">
+      Studio Dentistico Demo
+    </h3>
+
+    <div class="info-studio-grid" id="info-studio-content">
+      <!-- Contenuto caricato dinamicamente da ui-manager.js -->
+    </div>
+
+    <button class="close-btn" onclick="closePopup('popup-info-studio')" aria-label="Chiudi popup">
+      <i class="fas fa-times"></i> Chiudi
+    </button>
+  </div>
+
+  <!-- ==================== POPUP: SPECIALIZZAZIONI ==================== -->
+  <div id="popup-specializzazioni" class="info-popup" role="dialog" aria-labelledby="specializzazioni-title" aria-modal="true">
+    <h3 id="specializzazioni-title">
+      <i class="fas fa-tooth"></i> Le nostre Specializzazioni
+    </h3>
+    <div class="specialties-grid" id="specialties-content">
+      <!-- Contenuto caricato dinamicamente da ui-manager.js -->
+    </div>
+    <button class="close-btn" onclick="closePopup('popup-specializzazioni')" aria-label="Chiudi popup">
+      <i class="fas fa-times"></i> Chiudi
+    </button>
+  </div>
+
+  <!-- ==================== POPUP: ORARI ==================== -->
+  <div id="popup-orari" class="info-popup" role="dialog" aria-labelledby="orari-title" aria-modal="true">
+    <h3 id="orari-title">
+      <i class="fas fa-clock"></i> Orari di Apertura
+    </h3>
+    <div class="schedule-grid" id="schedule-content">
+      <!-- Contenuto caricato dinamicamente da ui-manager.js -->
+    </div>
+    <button class="close-btn" onclick="closePopup('popup-orari')" aria-label="Chiudi popup">
+      <i class="fas fa-times"></i> Chiudi
+    </button>
+  </div>
+
+  <!-- ==================== POPUP: SUPPORTO ==================== -->
+  <div id="popup-supporto" class="info-popup" role="dialog" aria-labelledby="supporto-title" aria-modal="true">
+    <h3 id="supporto-title">
+      <i class="fas fa-headset"></i> Contattaci
+    </h3>
+    <div class="support-grid" id="support-content">
+      <!-- Contenuto caricato dinamicamente da ui-manager.js -->
+    </div>
+    <button class="close-btn" onclick="closePopup('popup-supporto')" aria-label="Chiudi popup">
+      <i class="fas fa-times"></i> Chiudi
+    </button>
+  </div>
+
+  <!-- ==================== POPUP: LOCATION ==================== -->
+  <div id="popup-location" class="info-popup" role="dialog" aria-labelledby="location-title" aria-modal="true">
+    <h3 id="location-title">
+      <i class="fas fa-map-marker-alt"></i> Dove Siamo
+    </h3>
+    <div id="location-content">
+      <!-- Contenuto caricato dinamicamente da ui-manager.js -->
+    </div>
+    <button class="close-btn" onclick="closePopup('popup-location')" aria-label="Chiudi popup">
+      <i class="fas fa-times"></i> Chiudi
+    </button>
+  </div>
+
+  <!-- ==================== POPUP: GALLERY ==================== -->
+  <div id="popup-gallery" class="info-popup gallery-popup" role="dialog" aria-labelledby="gallery-title" aria-modal="true">
+    <h3 id="gallery-title">
+      <i class="fas fa-images"></i> Studio Dentistico Demo
+    </h3>
+
+    <!-- Immagine principale -->
+    <div class="gallery-main">
+      <img id="main-gallery-img" src="images/1.jpg" alt="Foto studio principale" loading="lazy">
+    </div>
+
+    <!-- Miniature orizzontali -->
+    <div class="gallery-thumbnails">
+      <img src="images/1.jpg" 
+           alt="Foto studio 1" 
+           onclick="updateMainGallery(this)" 
+           onkeypress="handleImageKeyPress(event, this)"
+           tabindex="0"
+           loading="lazy">
+      <img src="images/2.jpg" 
+           alt="Foto studio 2" 
+           onclick="updateMainGallery(this)"
+           onkeypress="handleImageKeyPress(event, this)"
+           tabindex="0"
+           loading="lazy">
+      <img src="images/3.jpg" 
+           alt="Foto studio 3" 
+           onclick="updateMainGallery(this)"
+           onkeypress="handleImageKeyPress(event, this)"
+           tabindex="0"
+           loading="lazy">
+    </div>
+
+    <button class="close-btn" onclick="closePopup('popup-gallery')" aria-label="Chiudi gallery">
+      <i class="fas fa-times"></i> Chiudi
+    </button>
+  </div>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="footer-info">
+    <div class="footer-left">
+      <img src="images/logo.png" alt="Logo Studio" loading="lazy">
+      <div class="social-icons">
+        <a href="#" title="Facebook" aria-label="Seguici su Facebook" target="_blank" rel="noopener">
+          <i class="fab fa-facebook-f"></i>
+        </a>
+        <a href="#" title="Instagram" aria-label="Seguici su Instagram" target="_blank" rel="noopener">
+          <i class="fab fa-instagram"></i>
+        </a>
+        <a href="#" title="WhatsApp" aria-label="Contattaci su WhatsApp" target="_blank" rel="noopener">
+          <i class="fab fa-whatsapp"></i>
+        </a>
+        <a href="#" title="YouTube" aria-label="Iscriviti al nostro canale YouTube" target="_blank" rel="noopener">
+          <i class="fab fa-youtube"></i>
+        </a>
+        <a href="#" title="LinkedIn" aria-label="Collegati con noi su LinkedIn" target="_blank" rel="noopener">
+          <i class="fab fa-linkedin-in"></i>
+        </a>
+      </div>
+    </div>
+
+    <div class="footer-center" id="footer-info">
+      Studio Dentistico Demo SRL<br>
+      P.IVA 01234567890<br>
+      Iscrizione Albo Medici Odontoiatri: MI-123456
+    </div>
+
+    <div class="footer-right">
+      <img src="https://digitalandmore.it/wp-content/uploads/2022/10/cropped-400x120-2.png" 
+           alt="Digital&More Logo" 
+           style="height: 50px; margin-bottom: 8px;"
+           loading="lazy">
+      <p>L'Assistente Digitale è un servizio fornito da 
+        <a href="https://digitalandmore.it" target="_blank" rel="noopener">digitalandmore.it</a>
+      </p>
+    </div>
+  </footer>
+
+  <!-- ==================== JAVASCRIPT ==================== -->
+  <script>
+    // ==================== POPUP MANAGEMENT ====================
+    function openPopup(popupId) {
+      const overlay = document.getElementById('overlay-bg');
+      const popup = document.getElementById(popupId);
+      
+      if (overlay && popup) {
+        overlay.style.display = 'block';
+        popup.style.display = 'block';
+        
+        // Focus management per accessibilità
+        popup.focus();
+        
+        // Prevent body scroll
+        document.body.style.overflow = 'hidden';
+        
+        console.log(`✅ Popup ${popupId} aperto`);
+      }
+    }
+
+    function closePopup(popupId) {
+      const overlay = document.getElementById('overlay-bg');
+      const popup = document.getElementById(popupId);
+      
+      if (overlay && popup) {
+        overlay.style.display = 'none';
+        popup.style.display = 'none';
+        
+        // Restore body scroll
+        document.body.style.overflow = '';
+        
+        console.log(`✅ Popup ${popupId} chiuso`);
+      }
+    }
+
+    function closeAllPopups() {
+      // Nascondi tutti i popup
+      document.querySelectorAll('.info-popup').forEach(popup => {
+        popup.style.display = 'none';
+      });
+      
+      // Nascondi overlay
+      const overlay = document.getElementById('overlay-bg');
+      if (overlay) {
+        overlay.style.display = 'none';
+      }
+      
+      // Restore body scroll
+      document.body.style.overflow = '';
+      
+      console.log('✅ Tutti i popup chiusi');
+    }
+
+    // ==================== GALLERY MANAGEMENT ====================
+    function updateMainGallery(imgElement) {
+      const mainImg = document.getElementById('main-gallery-img');
+      if (mainImg && imgElement) {
+        mainImg.src = imgElement.src;
+        mainImg.alt = imgElement.alt;
+        
+        // Aggiorna focus per accessibilità
+        mainImg.focus();
+        
+        console.log('✅ Immagine gallery aggiornata');
+      }
+    }
+
+    function handleImageKeyPress(event, imgElement) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        updateMainGallery(imgElement);
+      }
+    }
+
+    // ==================== CHAT MANAGEMENT ====================
+    function handleEnterKey(event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    }
+
+    // Placeholder per sendMessage - verrà implementata in chat.js
+    function sendMessage() {
+      console.log('📧 Invio messaggio...');
+      // Implementazione in chat.js
+    }
+
+    // ==================== EVENT LISTENERS ====================
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('🚀 DOM caricato, inizializzazione...');
+      
+      // Gestione chiusura popup con overlay
+      const overlay = document.getElementById('overlay-bg');
+      if (overlay) {
+        overlay.addEventListener('click', function(e) {
+          if (e.target === this) {
+            closeAllPopups();
+          }
+        });
+      }
+      
+      // Gestione chiusura popup con ESC
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          closeAllPopups();
+        }
+      });
+
+      // Focus management per accessibilità
+      document.querySelectorAll('.info-popup').forEach(popup => {
+        popup.setAttribute('tabindex', '-1');
+      });
+
+      // Auto focus su input chat
+      const chatInput = document.getElementById('user-input');
+      if (chatInput) {
+        chatInput.focus();
+      }
+
+      console.log('✅ Event listeners inizializzati');
+    });
+
+    // ==================== ERROR HANDLING ====================
+    window.addEventListener('error', function(e) {
+      console.error('❌ Errore JavaScript:', e.error);
+    });
+
+    // ==================== PERFORMANCE MONITORING ====================
+    window.addEventListener('load', function() {
+      console.log('⚡ Pagina completamente caricata');
+      
+      // Optional: Performance timing
+      if (window.performance && window.performance.timing) {
+        const loadTime = window.performance.timing.loadEventEnd - window.performance.timing.navigationStart;
+        console.log(`📊 Tempo di caricamento: ${loadTime}ms`);
+      }
+    });
+  </script>
+  
+  <!-- ==================== EXTERNAL SCRIPTS ==================== -->
+  <!-- Scripts caricati in ordine di dipendenza -->
+  <script src="functions.js"></script>
+  <script src="ui-manager.js"></script>
+  <script src="chat.js"></script>
+
+  <!-- ==================== SCHEMA.ORG MARKUP ==================== -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "DentalClinic",
+    "name": "Studio Dentistico Demo",
+    "description": "Studio dentistico con assistente digitale per informazioni e prenotazioni",
+    "url": "https://www.studiodemo.it",
+    "telephone": "+39-123-456-7890",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "Via Demo 123",
+      "addressLocality": "Milano",
+      "addressRegion": "MI",
+      "addressCountry": "IT"
+    },
+    "openingHours": [
+      "Mo-Fr 09:00-18:00",
+      "Sa 09:00-13:00"
+    ],
+    "priceRange": "€€",
+    "hasOfferCatalog": {
+      "@type": "OfferCatalog",
+      "name": "Servizi Odontoiatrici",
+      "itemListElement": [
+        {
+          "@type": "Offer",
+          "itemOffered": {
+            "@type": "Service",
+            "name": "Igiene Orale"
+          }
+        }
+      ]
+    }
+  }
+  </script>
+</body>
+</html>
