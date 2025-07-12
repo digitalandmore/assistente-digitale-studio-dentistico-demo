@@ -6,6 +6,16 @@
   <title>Assistente Digitale - Studio Demo</title>
   <meta name="description" content="Assistente digitale per Studio Dentistico Demo - Informazioni, orari, contatti e prenotazioni online">
   <meta name="keywords" content="dentista, studio dentistico, assistente digitale, prenotazioni online">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://assistente-digitale-studio-dentistico.onrender.com">
+  <meta property="og:title" content="Assistente Digitale - Studio Demo">
+  <meta property="og:description" content="Demo dell'assistente digitale per studi dentistici con ChatGPT">
+  
+  <!-- Canonical URL -->
+  <link rel="canonical" href="https://assistente-digitale-studio-dentistico.onrender.com">
+  
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -45,8 +55,12 @@
         <p class="descrizione">Prenota ora una pulizia completa e ricevi il <strong>20% di sconto</strong> sulla prossima visita!</p>
       </div>
 
-      <!-- Info Buttons -->
+            <!-- Info Buttons -->
       <div class="info-buttons">
+        <button class="chat-assistant-btn" onclick="openMobileChat()" aria-label="Chatta con l'Assistente Digitale">
+          <img src="https://assistente-digitale.it/images/favicon.png" alt="Assistente Digitale" class="assistant-icon">
+          Chiedi al nostro Assistente Digitale
+        </button>
         <button onclick="openPopup('popup-info-studio')" aria-label="Informazioni sullo Studio">
           <i class="fas fa-info-circle"></i> Informazioni sullo Studio
         </button>
@@ -63,9 +77,8 @@
           <i class="fas fa-map-marker-alt"></i> Dove trovarci
         </button>
       </div>
-    </div>
 
-    <!-- ==================== CHAT WINDOW ==================== -->
+    <!-- ==================== CHAT WINDOW (DESKTOP) ==================== -->
     <div class="chat-window">
       <div class="chat-header">
         <img src="images/logo.png" alt="Logo Studio">
@@ -88,6 +101,46 @@
           <i class="fas fa-paper-plane"></i>
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- ==================== MOBILE CHAT WIDGET ==================== -->
+  <div class="chat-widget">
+    <button class="chat-widget-button" onclick="openMobileChat()" aria-label="Apri chat assistente">
+      <img src="https://assistente-digitale.it/images/favicon.png" alt="Chat Assistant">
+      <div class="chat-notification" id="chat-notification">1</div>
+    </button>
+  </div>
+
+  <!-- Chat Overlay Mobile -->
+  <div class="chat-overlay" id="chat-overlay" onclick="closeMobileChat()"></div>
+
+  <!-- Chat Mobile Fullscreen -->
+  <div class="chat-mobile" id="chat-mobile">
+    <div class="chat-mobile-header">
+      <div class="chat-mobile-title">
+        <img src="https://assistente-digitale.it/images/favicon.png" alt="Logo Studio">
+        <span>Assistente Digitale</span>
+      </div>
+      <button class="chat-close-btn" onclick="closeMobileChat()" aria-label="Chiudi chat">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="chat-mobile-body" id="chat-mobile-body">
+      <!-- Messaggi chat mobile -->
+    </div>
+    <div class="chat-mobile-input">
+      <input type="text" 
+             id="mobile-user-input" 
+             placeholder="Scrivi qui la tua domanda..." 
+             maxlength="500"
+             autocomplete="off"
+             onkeypress="handleMobileEnterKey(event)">
+      <button onclick="sendMobileMessage()" 
+              id="mobile-send-button"
+              aria-label="Invia messaggio">
+        <i class="fas fa-paper-plane"></i>
+      </button>
     </div>
   </div>
 
@@ -227,7 +280,7 @@
     </div>
 
     <div class="footer-right">
-      <img src="https://digitalandmore.it/wp-content/uploads/2022/10/cropped-400x120-2.png" 
+      <img src="https://assistente-digitale.it/images/logo-verticale.png" 
            alt="Digital&More Logo" 
            style="height: 50px; margin-bottom: 8px;"
            loading="lazy">
@@ -239,6 +292,154 @@
 
   <!-- ==================== JAVASCRIPT ==================== -->
   <script>
+    // ==================== MOBILE CHAT WIDGET ====================
+    let mobileChat = {
+      isOpen: false,
+      hasNewMessage: false,
+      messageHistory: []
+    };
+
+    function openMobileChat() {
+      const overlay = document.getElementById('chat-overlay');
+      const chatMobile = document.getElementById('chat-mobile');
+      const notification = document.getElementById('chat-notification');
+      
+      if (overlay && chatMobile) {
+        overlay.classList.add('active');
+        chatMobile.classList.add('active');
+        mobileChat.isOpen = true;
+        
+        // Nascondi notifica
+        if (notification) {
+          notification.style.display = 'none';
+        }
+        
+        // Prevent body scroll
+        document.body.style.overflow = 'hidden';
+        
+        // Focus su input
+        const mobileInput = document.getElementById('mobile-user-input');
+        if (mobileInput) {
+          setTimeout(() => mobileInput.focus(), 300);
+        }
+        
+        // Sincronizza messaggi se è la prima apertura
+        if (mobileChat.messageHistory.length === 0) {
+          syncMessagesToMobile();
+        }
+        
+        console.log('✅ Chat mobile aperta');
+      }
+    }
+
+    function closeMobileChat() {
+      const overlay = document.getElementById('chat-overlay');
+      const chatMobile = document.getElementById('chat-mobile');
+      
+      if (overlay && chatMobile) {
+        overlay.classList.remove('active');
+        chatMobile.classList.remove('active');
+        mobileChat.isOpen = false;
+        
+        // Restore body scroll
+        document.body.style.overflow = '';
+        
+        console.log('✅ Chat mobile chiusa');
+      }
+    }
+
+    function handleMobileEnterKey(event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMobileMessage();
+      }
+    }
+
+    function sendMobileMessage() {
+      const mobileInput = document.getElementById('mobile-user-input');
+      const message = mobileInput.value.trim();
+      
+      if (!message) return;
+      
+      mobileInput.value = '';
+      
+      // Aggiungi messaggio utente alla chat mobile
+      appendMobileMessage('user', message);
+      
+      // Chiama la stessa logica del desktop se disponibile
+      if (typeof window.sendMessageToAPI === 'function') {
+        window.sendMessageToAPI(message, (response) => {
+          appendMobileMessage('bot', response);
+        });
+      } else {
+        // Fallback
+        setTimeout(() => {
+          appendMobileMessage('bot', '👋 Ciao! Come posso aiutarti?');
+        }, 1000);
+      }
+    }
+
+    function appendMobileMessage(type, message) {
+      const chatBody = document.getElementById('chat-mobile-body');
+      if (!chatBody) return;
+      
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${type}`;
+      messageDiv.innerHTML = message;
+      
+      chatBody.appendChild(messageDiv);
+      chatBody.scrollTop = chatBody.scrollHeight;
+      
+      // Salva nella history
+      mobileChat.messageHistory.push({ type, message });
+      
+      console.log(`📱 Messaggio ${type} aggiunto alla chat mobile`);
+    }
+
+    function syncMessagesToMobile() {
+      const desktopChatBody = document.getElementById('chat-body');
+      const mobileChatBody = document.getElementById('chat-mobile-body');
+      
+      if (desktopChatBody && mobileChatBody) {
+        // Copia tutti i messaggi dal desktop al mobile
+        const messages = desktopChatBody.querySelectorAll('.message');
+        
+        mobileChatBody.innerHTML = '';
+        
+        messages.forEach(msg => {
+          const newMsg = msg.cloneNode(true);
+          mobileChatBody.appendChild(newMsg);
+        });
+        
+        mobileChatBody.scrollTop = mobileChatBody.scrollHeight;
+        console.log('✅ Messaggi sincronizzati con chat mobile');
+      }
+    }
+
+    function showMobileNotification() {
+      const notification = document.getElementById('chat-notification');
+      if (notification && !mobileChat.isOpen) {
+        notification.style.display = 'flex';
+        mobileChat.hasNewMessage = true;
+      }
+    }
+
+    // ==================== RESPONSIVE CHAT DETECTION ====================
+    function detectMobileChat() {
+      const isMobile = window.innerWidth <= 768;
+      const desktopChat = document.querySelector('.chat-window');
+      const mobileWidget = document.querySelector('.chat-widget');
+      
+      if (isMobile) {
+        if (desktopChat) desktopChat.style.display = 'none';
+        if (mobileWidget) mobileWidget.style.display = 'block';
+      } else {
+        if (desktopChat) desktopChat.style.display = 'flex';
+        if (mobileWidget) mobileWidget.style.display = 'none';
+        closeMobileChat();
+      }
+    }
+
     // ==================== POPUP MANAGEMENT ====================
     function openPopup(popupId) {
       const overlay = document.getElementById('overlay-bg');
@@ -330,6 +531,9 @@
     document.addEventListener('DOMContentLoaded', function() {
       console.log('🚀 DOM caricato, inizializzazione...');
       
+      // Inizializza chat detection
+      detectMobileChat();
+      
       // Gestione chiusura popup con overlay
       const overlay = document.getElementById('overlay-bg');
       if (overlay) {
@@ -344,6 +548,9 @@
       document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
           closeAllPopups();
+          if (mobileChat.isOpen) {
+            closeMobileChat();
+          }
         }
       });
 
@@ -352,14 +559,23 @@
         popup.setAttribute('tabindex', '-1');
       });
 
-      // Auto focus su input chat
+      // Auto focus su input chat desktop
       const chatInput = document.getElementById('user-input');
-      if (chatInput) {
+      if (chatInput && window.innerWidth > 768) {
         chatInput.focus();
+      }
+
+      // Mostra notifica mobile dopo 3 secondi
+      if (window.innerWidth <= 768) {
+        setTimeout(showMobileNotification, 3000);
       }
 
       console.log('✅ Event listeners inizializzati');
     });
+
+    // Rileva cambio orientamento/resize
+    window.addEventListener('resize', detectMobileChat);
+    window.addEventListener('orientationchange', detectMobileChat);
 
     // ==================== ERROR HANDLING ====================
     window.addEventListener('error', function(e) {
