@@ -12,9 +12,13 @@ const port = process.env.PORT || 3000;
 app.use(cors({
   origin: [
     'http://localhost:3000',
+    'https://assistente-digitale.it',
+    'https://www.assistente-digitale.it',
     'https://assistente-digitale-studio-dentistico.onrender.com'
   ],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id']
 }));
 app.use(express.json());
 app.use(express.static('.')); // Serve static files from current directory
