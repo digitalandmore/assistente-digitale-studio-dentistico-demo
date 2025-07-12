@@ -2274,3 +2274,275 @@ body {
     display: none !important;
   }
 }
+
+/* ==================== ELEGANT RESET BUTTON - NUOVA CHAT ==================== */
+.elegant-reset-btn {
+  /* Base styles */
+  background: linear-gradient(135deg, #007bcc, #0056b3);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 25px;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  
+  /* Layout */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 8px 4px;
+  min-width: 160px;
+  
+  /* Visual effects */
+  box-shadow: 0 4px 12px rgba(0, 123, 204, 0.3);
+  border: 2px solid transparent;
+  position: relative;
+  overflow: hidden;
+  
+  /* Transitions */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateZ(0);
+}
+
+/* Hover effects */
+.elegant-reset-btn:hover {
+  background: linear-gradient(135deg, #0056b3, #003d7a);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 20px rgba(0, 123, 204, 0.4);
+}
+
+/* Active/pressed state */
+.elegant-reset-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 2px 8px rgba(0, 123, 204, 0.3);
+  transition-duration: 0.1s;
+}
+
+/* Focus state for accessibility */
+.elegant-reset-btn:focus {
+  outline: none;
+  border-color: #ffc107;
+  box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3), 0 4px 12px rgba(0, 123, 204, 0.3);
+}
+
+/* Disabled state */
+.elegant-reset-btn:disabled {
+  background: linear-gradient(135deg, #6c757d, #545b62);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  opacity: 0.6;
+}
+
+/* ==================== BUTTON VARIANTS ==================== */
+.elegant-reset-btn.success {
+  background: linear-gradient(135deg, #28a745, #1e7e34);
+}
+
+.elegant-reset-btn.success:hover {
+  background: linear-gradient(135deg, #1e7e34, #155724);
+}
+
+.elegant-reset-btn.warning {
+  background: linear-gradient(135deg, #ffc107, #e0a800);
+  color: #212529;
+}
+
+.elegant-reset-btn.warning:hover {
+  background: linear-gradient(135deg, #e0a800, #d39e00);
+}
+
+.elegant-reset-btn.danger {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+}
+
+.elegant-reset-btn.danger:hover {
+  background: linear-gradient(135deg, #c82333, #bd2130);
+}
+
+/* ==================== CONTAINER STYLES ==================== */
+.limit-reached-container {
+  margin: 16px 0;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+  border-radius: 16px;
+  border: 2px dashed #007bcc;
+  text-align: center;
+  position: relative;
+}
+
+.limit-reached-container::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  background: linear-gradient(45deg, #007bcc, #0056b3, #007bcc);
+  border-radius: 16px;
+  z-index: -1;
+  opacity: 0.1;
+}
+
+.token-warning-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 4px 0;
+}
+
+/* ==================== COST TRACKING STYLES ==================== */
+.cost-info {
+  background: linear-gradient(135deg, #e8f5e8, #f0f8f0);
+  border-left: 4px solid #28a745;
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #155724;
+}
+
+.cost-warning {
+  background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+  border-left: 4px solid #ffc107;
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #856404;
+}
+
+.cost-critical {
+  background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+  border-left: 4px solid #dc3545;
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #721c24;
+}
+
+.budget-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(40, 167, 69, 0.1);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #28a745;
+}
+
+/* ==================== ANIMATIONS ==================== */
+.elegant-reset-btn {
+  animation: slideInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.elegant-reset-btn.pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 4px 12px rgba(0, 123, 204, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(0, 123, 204, 0.6);
+  }
+  100% {
+    box-shadow: 0 4px 12px rgba(0, 123, 204, 0.3);
+  }
+}
+
+/* ==================== RESPONSIVE DESIGN ==================== */
+@media (max-width: 768px) {
+  .elegant-reset-btn {
+    width: 100%;
+    max-width: 280px;
+    padding: 16px 24px;
+    font-size: 16px;
+    border-radius: 12px;
+    margin: 12px 0;
+  }
+  
+  .token-warning-content {
+    align-items: center;
+    text-align: center;
+  }
+  
+  .limit-reached-container {
+    margin: 12px 0;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .elegant-reset-btn {
+    padding: 14px 20px;
+    font-size: 15px;
+    min-width: 140px;
+  }
+}
+
+/* ==================== ACCESSIBILITY ==================== */
+@media (prefers-contrast: high) {
+  .elegant-reset-btn {
+    border: 2px solid currentColor;
+    background: #007bcc;
+  }
+  
+  .elegant-reset-btn:hover {
+    background: #0056b3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .elegant-reset-btn {
+    animation: none;
+    transition: none;
+  }
+  
+  .elegant-reset-btn:hover {
+    transform: none;
+  }
+  
+  .elegant-reset-btn:active {
+    transform: none;
+  }
+}
+
+/* ==================== DARK MODE ==================== */
+@media (prefers-color-scheme: dark) {
+  .elegant-reset-btn {
+    background: linear-gradient(135deg, #0d6efd, #0b5ed7);
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.4);
+  }
+  
+  .elegant-reset-btn:hover {
+    background: linear-gradient(135deg, #0b5ed7, #0a58ca);
+    box-shadow: 0 8px 20px rgba(13, 110, 253, 0.5);
+  }
+  
+  .limit-reached-container {
+    background: linear-gradient(135deg, #2d3748, #4a5568);
+    border-color: #0d6efd;
+    color: #e2e8f0;
+  }
+}

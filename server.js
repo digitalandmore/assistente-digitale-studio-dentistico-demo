@@ -2,13 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
 const OpenAI = require('openai');
+const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Middleware
+// ==================== MIDDLEWARE ====================
 app.use(cors({
   origin: [
     'http://localhost:3000',
@@ -21,28 +22,61 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id']
 }));
 app.use(express.json());
-app.use(express.static('.')); // Serve static files from current directory
+app.use(express.static('.'));
 
-// OpenAI Configuration
+// ==================== OPENAI CONFIGURATION ====================
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Session storage (in production, use Redis or database)
+// ==================== COMPANY INFO LOADER ====================
+let companyInfo = {};
+function loadCompanyInfo() {
+  try {
+    const data = fs.readFileSync('company-info.json', 'utf8');
+    companyInfo = JSON.parse(data);
+    console.log('✅ Company info caricato:', Object.keys(companyInfo));
+    return companyInfo;
+  } catch (error) {
+    console.error('❌ Errore caricamento company-info.json:', error);
+    companyInfo = getDefaultCompanyInfo();
+    return companyInfo;
+  }
+}
+
+function getDefaultCompanyInfo() {
+  return {
+    studio: {
+      nome: "Studio Dentistico Demo",
+      indirizzo: "Via dei Dentisti 10, Milano (MI)",
+      telefono: "+39 123 456 7890",
+      email: "info@studiodemo.it"
+    },
+    orari: {
+      lunedi_venerdi: "09:00 - 18:00",
+      sabato: "09:00 - 13:00",
+      domenica: "Chiuso"
+    },
+    servizi: {
+      igiene_orale: {
+        nome: "Igiene Orale",
+        descrizione: "Pulizia dentale professionale e prevenzione"
+      },
+      conservativa: {
+        nome: "Conservativa",
+        descrizione: "Cura delle carie e ricostruzioni"
+      }
+    },
+    offerte: {}
+  };
+}
+
+// Carica i dati all'avvio
+loadCompanyInfo();
+
+// ==================== SESSION MANAGEMENT ====================
 const sessions = new Map();
 
-// Email transporter configuration - CORREZIONE QUI
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-// Session management functions
 function getOrCreateSession(req) {
   const sessionId = req.headers['x-session-id'] || 'default';
   
@@ -53,6 +87,8 @@ function getOrCreateSession(req) {
       tokenCount: 0,
       flowCount: 0,
       conversationHistory: [],
+      currentFlow: null,
+      flowData: {},
       isExpired: false,
       lastActivity: new Date()
     });
@@ -63,18 +99,17 @@ function getOrCreateSession(req) {
   session.lastActivity = new Date();
   
   // Check session timeout
-  const timeoutMs = parseInt(process.env.SESSION_TIMEOUT_MINUTES) * 60 * 1000;
+  const timeoutMs = (parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 30) * 60 * 1000;
   if (Date.now() - session.createdAt.getTime() > timeoutMs) {
     session.isExpired = true;
-    console.log(`⏰ Sessione scaduta: ${sessionId}`);
   }
   
   return session;
 }
 
 function checkSessionLimits(session) {
-  const maxTokens = parseInt(process.env.MAX_TOKENS_PER_SESSION);
-  const maxFlows = parseInt(process.env.MAX_FLOWS_PER_SESSION);
+  const maxTokens = parseInt(process.env.MAX_TOKENS_PER_SESSION) || 10000;
+  const maxFlows = parseInt(process.env.MAX_FLOWS_PER_SESSION) || 5;
   
   return {
     tokenLimitReached: session.tokenCount >= maxTokens,
@@ -83,186 +118,413 @@ function checkSessionLimits(session) {
   };
 }
 
-// Clean expired sessions every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  const timeoutMs = parseInt(process.env.SESSION_TIMEOUT_MINUTES) * 60 * 1000;
+// ==================== AI SYSTEM PROMPT GENERATOR ====================
+function generateSystemPrompt(session, companyInfo) {
+  const studio = companyInfo.studio || {};
+  const orari = companyInfo.orari || {};
+  const servizi = companyInfo.servizi || {};
+  const offerte = companyInfo.offerte || {};
   
-  for (const [sessionId, session] of sessions.entries()) {
-    if (now - session.lastActivity.getTime() > timeoutMs) {
-      sessions.delete(sessionId);
-      console.log(`🗑️ Sessione rimossa per inattività: ${sessionId}`);
-    }
+  // Informazioni sui flow attivi
+  const flowInfo = session.currentFlow ? `
+FLOW ATTIVO: ${session.currentFlow}
+DATI RACCOLTI: ${JSON.stringify(session.flowData, null, 2)}
+
+Se il flow è attivo, continua a raccogliere i dati mancanti seguendo l'ordine logico.
+` : '';
+
+  return `Sei l'assistente digitale di ${studio.nome || 'Studio Dentistico Demo'}.
+
+=== INFORMAZIONI DELLO STUDIO ===
+Nome: ${studio.nome || 'Studio Dentistico Demo'}
+Indirizzo: ${studio.indirizzo || 'Via dei Dentisti 10, Milano (MI)'}
+Telefono: ${studio.telefono || '+39 123 456 7890'}
+Email: ${studio.email || 'info@studiodemo.it'}
+
+=== ORARI ===
+Lunedì-Venerdì: ${orari.lunedi_venerdi || '09:00-18:00'}
+Sabato: ${orari.sabato || '09:00-13:00'}
+Domenica: ${orari.domenica || 'Chiuso'}
+
+=== SERVIZI DISPONIBILI ===
+${Object.values(servizi).map(s => `- ${s.nome}: ${s.descrizione}`).join('\n')}
+
+=== OFFERTE ATTIVE ===
+${Object.keys(offerte).length > 0 ? 
+  Object.values(offerte).map(o => `- ${o.nome}: ${o.descrizione}${o.scadenza ? ` (valida fino al ${o.scadenza})` : ''}`).join('\n') :
+  'Nessuna offerta attiva al momento'
+}
+
+${flowInfo}
+
+=== ISTRUZIONI COMPORTAMENTALI ===
+1. Rispondi SEMPRE in italiano con tono professionale ma amichevole
+2. Usa emoji appropriate per rendere le risposte più accattivanti
+3. Formatta le risposte con HTML: <br> per andare a capo, <strong> per grassetto
+4. Rispondi SOLO con informazioni presenti nei dati forniti
+5. Se non sai qualcosa, suggerisci di chiamare il numero di telefono
+6. Per domande su altre sedi/città, spiega che c'è solo la sede indicata
+
+=== GESTIONE FLOW INTELLIGENTE ===
+Quando l'utente richiede:
+
+**PRENOTAZIONE APPUNTAMENTO:**
+- Attiva flow "appointment" 
+- Raccogli nell'ordine: nome, telefono, email, tipo_visita, urgenza, note
+- Validazione: nome min 2 caratteri, telefono formato italiano, email valida
+- Al completamento: mostra riepilogo e richiedi consenso GDPR
+
+**RICHIESTA PREVENTIVO:**
+- Attiva flow "quote" 
+- Raccogli: nome, telefono, email, servizio_interesse, budget_orientativo, note
+- Al completamento: informa che saranno ricontattati entro 24h
+
+**RICHIESTA INFORMAZIONI:**
+- Non serve flow, rispondi direttamente con le informazioni disponibili
+
+=== VALIDAZIONI ===
+- Nome: minimo 2 caratteri, solo lettere e spazi
+- Telefono: formato italiano (+39, 0xx, 3xx) con almeno 9 cifre
+- Email: formato standard con @ e dominio valido
+- Non accettare dati palesemente falsi (es: nome "asdf", telefono "123")
+
+=== ESEMPI DI FLOW ===
+
+**Inizio prenotazione:**
+"📅 Perfetto! Ti aiuto a prenotare un appuntamento.
+Come ti chiami?"
+
+**Raccolta telefono:**
+"📞 Ciao Mario! Qual è il tuo numero di telefono?
+Mi serve per confermare l'appuntamento."
+
+**Completamento:**
+"✅ Riepilogo prenotazione:
+👤 Nome: Mario Rossi
+📞 Telefono: +39 123 456 7890
+📧 Email: mario@email.com
+🦷 Visita: Controllo generale
+⏰ Urgenza: Normale
+
+Ti ricontatteremo entro 24 ore per confermare data e orario.
+
+[Pulsante GDPR da generare]"
+
+=== FORMATO RISPOSTE ===
+- Sempre cordiale e professionale
+- HTML semplice per formattazione
+- Emoji per rendere più amichevole
+- Informazioni chiare e strutturate
+- Call-to-action quando appropriato
+
+Rispondi sempre come se fossi un assistente umano esperto e disponibile.`;
+}
+
+// ==================== FLOW DETECTION ENGINE ====================
+function detectFlowIntent(message, session) {
+  const msg = message.toLowerCase();
+  
+  // Se già in un flow, continua quello
+  if (session.currentFlow) {
+    return { continue: true, flow: session.currentFlow };
   }
-}, 10 * 60 * 1000);
+  
+  // Detect new flow intents
+  if (msg.includes('prenotare') || msg.includes('appuntamento') || msg.includes('prenotazione')) {
+    return { start: true, flow: 'appointment' };
+  }
+  
+  if (msg.includes('preventivo') || msg.includes('quanto costa') || msg.includes('prezzo')) {
+    return { start: true, flow: 'quote' };
+  }
+  
+  return { continue: false, flow: null };
+}
 
-// Routes
+// ==================== FLOW COMPLETION CHECKER ====================
+function checkFlowCompletion(session) {
+  if (!session.currentFlow) return { complete: false };
+  
+  const requiredFields = {
+    appointment: ['nome', 'telefono', 'email', 'tipo_visita', 'urgenza'],
+    quote: ['nome', 'telefono', 'email', 'servizio_interesse']
+  };
+  
+  const required = requiredFields[session.currentFlow] || [];
+  const collected = Object.keys(session.flowData);
+  const missing = required.filter(field => !session.flowData[field]);
+  
+  return {
+    complete: missing.length === 0,
+    missing: missing,
+    progress: `${collected.length}/${required.length}`
+  };
+}
 
-// Serve main HTML file
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+// ==================== EMAIL TRANSPORTER ====================
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT || 587,
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
 });
 
-// Chat API endpoint
+// ==================== MAIN CHAT ENDPOINT ====================
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, history = [], systemPrompt } = req.body;
+    const { message, forceNewSession = false } = req.body;
+    
+    // Reset session if requested
+    if (forceNewSession) {
+      const sessionId = req.headers['x-session-id'] || 'default';
+      sessions.delete(sessionId);
+    }
+    
     const session = getOrCreateSession(req);
     const limits = checkSessionLimits(session);
     
-    console.log(`💬 Messaggio ricevuto da sessione ${session.id}: "${message.substring(0, 50)}..."`);
-    console.log(`📊 Token usati: ${session.tokenCount}/${process.env.MAX_TOKENS_PER_SESSION}, Flussi: ${session.flowCount}/${process.env.MAX_FLOWS_PER_SESSION}`);
+    console.log(`💬 [${session.id}] Messaggio: "${message.substring(0, 50)}..."`);
+    console.log(`📊 [${session.id}] Token: ${session.tokenCount}, Flow: ${session.currentFlow}`);
     
     // Check limits
     if (limits.tokenLimitReached || limits.sessionExpired) {
-      console.log(`🚫 Limite raggiunto per sessione ${session.id}`);
       return res.json({
-        response: "Hai raggiunto il limite di utilizzo per questa sessione. Clicca su 'Inizia Nuova Chat' per continuare.",
+        response: "Hai raggiunto il limite di utilizzo. Clicca 'Nuova Chat' per continuare.",
         limitReached: true,
-        sessionExpired: limits.sessionExpired
+        sessionExpired: limits.sessionExpired,
+        resetButton: true
       });
     }
     
-    // Prepare messages for OpenAI
+    // Detect flow intent
+    const flowIntent = detectFlowIntent(message, session);
+    
+    // Start new flow if detected
+    if (flowIntent.start) {
+      session.currentFlow = flowIntent.flow;
+      session.flowData = {};
+      console.log(`🔄 [${session.id}] Avviato flow: ${flowIntent.flow}`);
+    }
+    
+    // Generate system prompt with current context
+    const systemPrompt = generateSystemPrompt(session, companyInfo);
+    
+    // Prepare conversation history
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...session.conversationHistory.slice(-10), // Keep last 10 messages
+      ...session.conversationHistory.slice(-8), // Keep last 8 messages
       { role: 'user', content: message }
     ];
     
-    console.log(`🤖 Chiamata a OpenAI con ${messages.length} messaggi...`);
+    console.log(`🤖 [${session.id}] Chiamata ChatGPT...`);
     
-    // Call OpenAI
+    // Call ChatGPT
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL,
+      model: process.env.OPENAI_MODEL || 'gpt-4',
       messages: messages,
-      max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS),
-      temperature: parseFloat(process.env.OPENAI_TEMPERATURE),
+      max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS) || 800,
+      temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.7,
     });
     
     const response = completion.choices[0].message.content;
     const tokensUsed = completion.usage.total_tokens;
     
-    console.log(`✅ Risposta ricevuta (${tokensUsed} token): "${response.substring(0, 50)}..."`);
+    console.log(`✅ [${session.id}] Risposta ChatGPT (${tokensUsed} token)`);
     
-    // Update session
+    // Update conversation history
     session.conversationHistory.push(
       { role: 'user', content: message },
       { role: 'assistant', content: response }
     );
     session.tokenCount += tokensUsed;
     
-    // Keep conversation history manageable
-    if (session.conversationHistory.length > 20) {
-      session.conversationHistory = session.conversationHistory.slice(-20);
+    // Keep history manageable
+    if (session.conversationHistory.length > 16) {
+      session.conversationHistory = session.conversationHistory.slice(-16);
+    }
+    
+    // Try to extract flow data from user message
+    if (session.currentFlow) {
+      const extractedData = extractFlowData(message, session.currentFlow);
+      if (extractedData) {
+        Object.assign(session.flowData, extractedData);
+        console.log(`📝 [${session.id}] Dati estratti:`, extractedData);
+      }
+    }
+    
+    // Check if flow is complete
+    let flowStatus = null;
+    if (session.currentFlow) {
+      flowStatus = checkFlowCompletion(session);
+      
+      if (flowStatus.complete) {
+        console.log(`✅ [${session.id}] Flow ${session.currentFlow} completato!`);
+        
+        // Send email notification
+        await sendFlowCompletionEmail(session.currentFlow, session.flowData);
+        
+        // Reset flow
+        session.currentFlow = null;
+        session.flowCount++;
+        
+        // Add GDPR button to response if it's an appointment
+        if (session.currentFlow === 'appointment') {
+          response += `\n\n<button id="gdpr-accept-btn" class="gdpr-button">✅ Accetto il trattamento dei dati</button>`;
+        }
+      }
     }
     
     res.json({
       response: response,
       tokensUsed: tokensUsed,
       totalTokens: session.tokenCount,
-      remainingTokens: parseInt(process.env.MAX_TOKENS_PER_SESSION) - session.tokenCount
+      remainingTokens: (parseInt(process.env.MAX_TOKENS_PER_SESSION) || 10000) - session.tokenCount,
+      currentFlow: session.currentFlow,
+      flowData: session.flowData,
+      flowStatus: flowStatus,
+      sessionId: session.id
     });
     
   } catch (error) {
-    console.error('❌ Errore chiamata OpenAI:', error);
+    console.error('❌ Errore ChatGPT:', error);
     res.status(500).json({
-      response: "Mi dispiace, sto avendo problemi tecnici. Per favore riprova tra poco.",
-      error: true
+      response: "Mi dispiace, sto avendo problemi tecnici. Riprova tra poco o chiamaci direttamente.",
+      error: true,
+      fallback: true
     });
   }
 });
 
-// Flow completion endpoint
-app.post('/api/flow-completed', (req, res) => {
-  const session = getOrCreateSession(req);
-  session.flowCount++;
+// ==================== FLOW DATA EXTRACTION ====================
+function extractFlowData(message, flowType) {
+  const extractedData = {};
   
-  const limits = checkSessionLimits(session);
+  // Simple extraction patterns
+  const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/;
+  const phoneRegex = /(\+39|0)?[\s]?([0-9]{2,3})[\s]?([0-9]{6,7}|[0-9]{3}[\s]?[0-9]{3,4})/;
+  const nameRegex = /^[a-zA-ZÀ-ÿ\s]{2,30}$/;
   
-  console.log(`✅ Flusso completato per sessione ${session.id}. Totale flussi: ${session.flowCount}`);
+  // Extract email
+  const emailMatch = message.match(emailRegex);
+  if (emailMatch) {
+    extractedData.email = emailMatch[0];
+  }
   
-  res.json({
-    flowCount: session.flowCount,
-    flowLimitReached: limits.flowLimitReached,
-    remainingFlows: parseInt(process.env.MAX_FLOWS_PER_SESSION) - session.flowCount
-  });
-});
+  // Extract phone
+  const phoneMatch = message.match(phoneRegex);
+  if (phoneMatch) {
+    extractedData.telefono = phoneMatch[0].replace(/\s/g, '');
+  }
+  
+  // Extract name (if message is likely a name)
+  if (nameRegex.test(message.trim()) && message.trim().length >= 2) {
+    // Check if it's likely a name and not a service request
+    const lowerMsg = message.toLowerCase();
+    if (!lowerMsg.includes('vorrei') && !lowerMsg.includes('voglio') && !lowerMsg.includes('mi serve')) {
+      extractedData.nome = message.trim();
+    }
+  }
+  
+  // Flow-specific extraction
+  if (flowType === 'appointment') {
+    if (message.toLowerCase().includes('urgente') || message.toLowerCase().includes('subito')) {
+      extractedData.urgenza = 'urgente';
+    } else if (message.toLowerCase().includes('normale') || message.toLowerCase().includes('routine')) {
+      extractedData.urgenza = 'normale';
+    }
+  }
+  
+  return Object.keys(extractedData).length > 0 ? extractedData : null;
+}
 
-// Email sending endpoint
-app.post('/api/send-email', async (req, res) => {
+// ==================== EMAIL SENDING ====================
+async function sendFlowCompletionEmail(flowType, flowData) {
   try {
-    const { type, data, to, from, subject } = req.body;
+    const studio = companyInfo.studio || {};
     
-    console.log(`📧 Invio email tipo: ${type} a: ${to}`);
+    let subject = '';
+    let body = '';
     
-    let emailSubject = subject || `Nuova richiesta ${type} - Studio Dentistico Demo`;
-    let emailBody = '';
-    
-    if (type === 'lead') {
-      emailSubject = 'Nuova Richiesta - Assistente Digital Studio Dentistico';
-      emailBody = `
-🎯 NUOVA RICHIESTA - ASSISTENTE DIGITALE STUDIO DENTISTICO
+    if (flowType === 'appointment') {
+      subject = `Nuova Prenotazione - ${flowData.nome || 'N/A'}`;
+      body = `
+🎯 NUOVA PRENOTAZIONE APPUNTAMENTO
 
-📋 DATI CONTATTO:
-Nome: ${data.nome}
-Studio: ${data.studio}
-Email: ${data.email}
-Telefono: ${data.telefono}
-Città: ${data.citta}
-Proprietario Studio: ${data.proprietario}
+📋 DATI PAZIENTE:
+Nome: ${flowData.nome || 'N/A'}
+Telefono: ${flowData.telefono || 'N/A'}
+Email: ${flowData.email || 'N/A'}
+Tipo Visita: ${flowData.tipo_visita || 'N/A'}
+Urgenza: ${flowData.urgenza || 'N/A'}
+Note: ${flowData.note || 'Nessuna nota'}
 
-🔗 Fonte: Demo Assistente Digitale
-📅 Data: ${new Date().toLocaleString('it-IT')}
-📧 Email di contatto: preventivo@assistente-digitale.it
-
---
-Digital&More - Assistente Digitale per Studi Dentistici
-      `;
-    } else {
-      emailBody = `
-📋 NUOVA RICHIESTA ${type.toUpperCase()} - STUDIO DENTISTICO DEMO
-
-${Object.entries(data).map(([key, value]) => `${key.toUpperCase()}: ${value}`).join('\n')}
-
-📅 Data: ${new Date().toLocaleString('it-IT')}
+📅 Data Richiesta: ${new Date().toLocaleString('it-IT')}
 🔗 Fonte: Assistente Digitale Demo
 
 --
-Studio Dentistico Demo
+${studio.nome || 'Studio Dentistico Demo'}
+      `;
+    } else if (flowType === 'quote') {
+      subject = `Richiesta Preventivo - ${flowData.nome || 'N/A'}`;
+      body = `
+💰 NUOVA RICHIESTA PREVENTIVO
+
+📋 DATI CLIENTE:
+Nome: ${flowData.nome || 'N/A'}
+Telefono: ${flowData.telefono || 'N/A'}
+Email: ${flowData.email || 'N/A'}
+Servizio di Interesse: ${flowData.servizio_interesse || 'N/A'}
+Budget Orientativo: ${flowData.budget_orientativo || 'Non specificato'}
+Note: ${flowData.note || 'Nessuna nota'}
+
+📅 Data Richiesta: ${new Date().toLocaleString('it-IT')}
+🔗 Fonte: Assistente Digitale Demo
+
+--
+${studio.nome || 'Studio Dentistico Demo'}
       `;
     }
     
     const mailOptions = {
-      from: from || process.env.SMTP_USER,
-      to: to,
-      subject: emailSubject,
-      text: emailBody,
+      from: process.env.SMTP_USER,
+      to: studio.email || process.env.SMTP_USER,
+      subject: subject,
+      text: body,
     };
     
-    // In modalità sviluppo, logga invece di inviare email reali
     if (process.env.NODE_ENV === 'development') {
       console.log('📧 EMAIL (MODALITÀ SVILUPPO):');
-      console.log('From:', mailOptions.from);
-      console.log('To:', mailOptions.to);
-      console.log('Subject:', mailOptions.subject);
-      console.log('Body:');
-      console.log(mailOptions.text);
+      console.log('Subject:', subject);
+      console.log('Body:', body);
       console.log('--- FINE EMAIL ---');
     } else {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Email inviata con successo a: ${to}`);
+      console.log(`✅ Email ${flowType} inviata`);
     }
-    
-    res.json({ success: true });
     
   } catch (error) {
     console.error('❌ Errore invio email:', error);
-    res.status(500).json({ success: false, error: error.message });
   }
+}
+
+// ==================== GDPR ENDPOINT ====================
+app.post('/api/gdpr-consent', (req, res) => {
+  const { consent, sessionId } = req.body;
+  
+  console.log(`📋 Consenso GDPR ricevuto per sessione ${sessionId}: ${consent ? 'ACCETTATO' : 'RIFIUTATO'}`);
+  
+  res.json({
+    success: true,
+    message: consent ? 'Consenso acquisito correttamente' : 'Consenso non fornito'
+  });
 });
 
-// Reset session endpoint
+// ==================== UTILITY ENDPOINTS ====================
+
+// Reset session
 app.post('/api/reset-session', (req, res) => {
   const sessionId = req.headers['x-session-id'] || 'default';
   
@@ -274,7 +536,7 @@ app.post('/api/reset-session', (req, res) => {
   res.json({ success: true, message: 'Sessione resettata con successo' });
 });
 
-// Session info endpoint
+// Session info
 app.get('/api/session-info', (req, res) => {
   const session = getOrCreateSession(req);
   const limits = checkSessionLimits(session);
@@ -283,12 +545,21 @@ app.get('/api/session-info', (req, res) => {
     sessionId: session.id,
     tokenCount: session.tokenCount,
     flowCount: session.flowCount,
-    maxTokens: parseInt(process.env.MAX_TOKENS_PER_SESSION),
-    maxFlows: parseInt(process.env.MAX_FLOWS_PER_SESSION),
+    currentFlow: session.currentFlow,
+    flowData: session.flowData,
+    maxTokens: parseInt(process.env.MAX_TOKENS_PER_SESSION) || 10000,
+    maxFlows: parseInt(process.env.MAX_FLOWS_PER_SESSION) || 5,
     limits: limits,
     createdAt: session.createdAt,
     lastActivity: session.lastActivity
   });
+});
+
+// Company info endpoint
+app.get('/api/company-info', (req, res) => {
+  // Reload company info to get latest changes
+  loadCompanyInfo();
+  res.json(companyInfo);
 });
 
 // Health check
@@ -296,34 +567,53 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    model: process.env.OPENAI_MODEL,
-    maxTokensPerSession: process.env.MAX_TOKENS_PER_SESSION,
-    maxFlowsPerSession: process.env.MAX_FLOWS_PER_SESSION,
-    activeSessions: sessions.size
+    model: process.env.OPENAI_MODEL || 'gpt-4',
+    maxTokensPerSession: process.env.MAX_TOKENS_PER_SESSION || 10000,
+    maxFlowsPerSession: process.env.MAX_FLOWS_PER_SESSION || 5,
+    activeSessions: sessions.size,
+    companyInfoLoaded: Object.keys(companyInfo).length > 0
   });
 });
 
-// 404 handler
+// ==================== STATIC FILES ====================
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// ==================== ERROR HANDLERS ====================
 app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint non trovato' });
 });
 
-// Error handler
 app.use((error, req, res, next) => {
   console.error('❌ Errore server:', error);
   res.status(500).json({ error: 'Errore interno del server' });
 });
 
-// Start server
+// ==================== SESSION CLEANUP ====================
+setInterval(() => {
+  const now = Date.now();
+  const timeoutMs = (parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 30) * 60 * 1000;
+  
+  for (const [sessionId, session] of sessions.entries()) {
+    if (now - session.lastActivity.getTime() > timeoutMs) {
+      sessions.delete(sessionId);
+      console.log(`🗑️ Sessione rimossa per inattività: ${sessionId}`);
+    }
+  }
+}, 10 * 60 * 1000);
+
+// ==================== SERVER START ====================
 app.listen(port, '0.0.0.0', () => {
   console.log('🚀 ===================================');
-  console.log(`🚀 SERVER ASSISTENTE DIGITALE AVVIATO`);
+  console.log(`🚀 SERVER CHATGPT + FLOW AVVIATO`);
   console.log('🚀 ===================================');
-  console.log(`🌐 URL: ${process.env.NODE_ENV === 'production' ? 'https://assistente-digitale-studio-dentistico.onrender.com' : `http://localhost:${port}`}`);  console.log(`🤖 Modello OpenAI: ${process.env.OPENAI_MODEL}`);
-  console.log(`🎯 Max token per sessione: ${process.env.MAX_TOKENS_PER_SESSION}`);
-  console.log(`📊 Max flussi per sessione: ${process.env.MAX_FLOWS_PER_SESSION}`);
-  console.log(`⏰ Timeout sessione: ${process.env.SESSION_TIMEOUT_MINUTES} minuti`);
-  console.log(`📧 Email modalità: ${process.env.NODE_ENV === 'development' ? 'SVILUPPO (log only)' : 'PRODUZIONE'}`);
+  console.log(`🌐 URL: ${process.env.NODE_ENV === 'production' ? 'https://assistente-digitale-studio-dentistico.onrender.com' : `http://localhost:${port}`}`);
+  console.log(`🤖 Modello ChatGPT: ${process.env.OPENAI_MODEL || 'gpt-4'}`);
+  console.log(`📊 Max token/sessione: ${process.env.MAX_TOKENS_PER_SESSION || 10000}`);
+  console.log(`🔄 Max flow/sessione: ${process.env.MAX_FLOWS_PER_SESSION || 5}`);
+  console.log(`📋 Company info: ${Object.keys(companyInfo).length} sezioni caricate`);
+  console.log(`📧 Email mode: ${process.env.NODE_ENV === 'development' ? 'SVILUPPO' : 'PRODUZIONE'}`);
   console.log('🚀 ===================================');
 });
 

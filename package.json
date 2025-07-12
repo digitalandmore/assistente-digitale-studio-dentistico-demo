@@ -1,41 +1,20 @@
 {
   "name": "assistente-digitale-studio-dentistico",
-  "version": "1.0.0",
-  "description": "Assistente digitale per studio dentistico con ChatGPT e lead generation",
+  "version": "2.0.0",
+  "description": "Assistente digitale con ChatGPT per studio dentistico",
   "main": "server.js",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "nodemailer": "^6.9.1",
+    "openai": "^4.24.0",
+    "dotenv": "^16.3.1"
+  },
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
-    "build": "npm install"
+    "dev": "node server.js"
   },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "nodemailer": "^6.9.7",
-    "openai": "^4.20.1"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.10"
-  },
-  "keywords": [
-    "chatbot",
-    "dentist",
-    "openai",
-    "chatgpt",
-    "lead-generation",
-    "render",
-    "deployment"
-  ],
-  "author": "Digital&More",
-  "license": "MIT",
   "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=8.0.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/digitalandmore/assistente-digitale-studio-dentistico-demo.git"
-  },
-  "homepage": "https://assistente-digitale-studio-dentistico.onrender.com"
+    "node": ">=18.0.0"
+  }
 }
