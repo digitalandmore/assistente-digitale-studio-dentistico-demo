@@ -25,12 +25,32 @@ app.use(express.json());
 app.use(express.static('.'));
 
 // ==================== OPENAI CONFIGURATION ====================
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let openai = null;
+
+function initializeOpenAI() {
+  if (!process.env.OPENAI_API_KEY) {
+    console.log('⚠️ OPENAI_API_KEY non configurata');
+    return null;
+  }
+  
+  try {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+    console.log('✅ OpenAI inizializzato correttamente');
+    return openai;
+  } catch (error) {
+    console.error('❌ Errore inizializzazione OpenAI:', error);
+    return null;
+  }
+}
+
+// Inizializza OpenAI all'avvio
+openai = initializeOpenAI();
 
 // ==================== COMPANY INFO LOADER ====================
 let companyInfo = {};
+
 function loadCompanyInfo() {
   try {
     const data = fs.readFileSync('company-info.json', 'utf8');
@@ -65,6 +85,10 @@ function getDefaultCompanyInfo() {
       conservativa: {
         nome: "Conservativa",
         descrizione: "Cura delle carie e ricostruzioni"
+      },
+      ortodonzia: {
+        nome: "Ortodonzia",
+        descrizione: "Apparecchi e allineamento dentale"
       }
     },
     offerte: {}
@@ -74,7 +98,7 @@ function getDefaultCompanyInfo() {
 // Carica i dati all'avvio
 loadCompanyInfo();
 
-// ==================== SESSION MANAGEMENT ====================
+// ==================== SESSION MANAGEMENT CON CHAT COUNTER ====================
 const sessions = new Map();
 
 function getOrCreateSession(req) {
@@ -86,11 +110,14 @@ function getOrCreateSession(req) {
       createdAt: new Date(),
       tokenCount: 0,
       flowCount: 0,
+      chatCount: 0, // Contatore chat
       conversationHistory: [],
       currentFlow: null,
       flowData: {},
       isExpired: false,
-      lastActivity: new Date()
+      lastActivity: new Date(),
+      totalCost: 0, // Costo totale sessione
+      currentChatCost: 0 // Costo chat corrente
     });
     console.log(`📝 Nuova sessione creata: ${sessionId}`);
   }
@@ -99,7 +126,7 @@ function getOrCreateSession(req) {
   session.lastActivity = new Date();
   
   // Check session timeout
-  const timeoutMs = (parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 30) * 60 * 1000;
+  const timeoutMs = (parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 45) * 60 * 1000;
   if (Date.now() - session.createdAt.getTime() > timeoutMs) {
     session.isExpired = true;
   }
@@ -108,116 +135,72 @@ function getOrCreateSession(req) {
 }
 
 function checkSessionLimits(session) {
-  const maxTokens = parseInt(process.env.MAX_TOKENS_PER_SESSION) || 10000;
+  const maxTokens = parseInt(process.env.MAX_TOKENS_PER_SESSION) || 8000;
   const maxFlows = parseInt(process.env.MAX_FLOWS_PER_SESSION) || 5;
+  const maxChats = parseInt(process.env.MAX_CHATS_PER_SESSION) || 3;
+  const maxCostPerChat = parseFloat(process.env.MAX_COST_PER_CHAT) || 0.05;
+  
+  // Calcola costo attuale chat
+  const currentChatCost = session.currentChatCost || 0;
   
   return {
     tokenLimitReached: session.tokenCount >= maxTokens,
     flowLimitReached: session.flowCount >= maxFlows,
-    sessionExpired: session.isExpired
+    chatLimitReached: session.chatCount >= maxChats,
+    costLimitReached: currentChatCost >= maxCostPerChat,
+    sessionExpired: session.isExpired,
+    currentChatCost: currentChatCost,
+    remainingChats: maxChats - session.chatCount,
+    remainingBudget: maxCostPerChat - currentChatCost
   };
 }
 
-// ==================== AI SYSTEM PROMPT GENERATOR ====================
-function generateSystemPrompt(session, companyInfo) {
-  const studio = companyInfo.studio || {};
-  const orari = companyInfo.orari || {};
-  const servizi = companyInfo.servizi || {};
-  const offerte = companyInfo.offerte || {};
+// ==================== COST CALCULATION ====================
+function calculateCost(inputTokens, outputTokens) {
+  const inputCost = parseFloat(process.env.INPUT_TOKEN_COST) || 0.00015;
+  const outputCost = parseFloat(process.env.OUTPUT_TOKEN_COST) || 0.0006;
   
-  // Informazioni sui flow attivi
-  const flowInfo = session.currentFlow ? `
-FLOW ATTIVO: ${session.currentFlow}
-DATI RACCOLTI: ${JSON.stringify(session.flowData, null, 2)}
-
-Se il flow è attivo, continua a raccogliere i dati mancanti seguendo l'ordine logico.
-` : '';
-
-  return `Sei l'assistente digitale di ${studio.nome || 'Studio Dentistico Demo'}.
-
-=== INFORMAZIONI DELLO STUDIO ===
-Nome: ${studio.nome || 'Studio Dentistico Demo'}
-Indirizzo: ${studio.indirizzo || 'Via dei Dentisti 10, Milano (MI)'}
-Telefono: ${studio.telefono || '+39 123 456 7890'}
-Email: ${studio.email || 'info@studiodemo.it'}
-
-=== ORARI ===
-Lunedì-Venerdì: ${orari.lunedi_venerdi || '09:00-18:00'}
-Sabato: ${orari.sabato || '09:00-13:00'}
-Domenica: ${orari.domenica || 'Chiuso'}
-
-=== SERVIZI DISPONIBILI ===
-${Object.values(servizi).map(s => `- ${s.nome}: ${s.descrizione}`).join('\n')}
-
-=== OFFERTE ATTIVE ===
-${Object.keys(offerte).length > 0 ? 
-  Object.values(offerte).map(o => `- ${o.nome}: ${o.descrizione}${o.scadenza ? ` (valida fino al ${o.scadenza})` : ''}`).join('\n') :
-  'Nessuna offerta attiva al momento'
+  return (inputTokens * inputCost / 1000) + (outputTokens * outputCost / 1000);
 }
 
-${flowInfo}
+// ==================== RESET CHAT FUNCTION ====================
+function resetCurrentChat(session) {
+  // Incrementa contatore chat
+  session.chatCount += 1;
+  
+  // Reset parametri chat
+  session.currentChatCost = 0;
+  session.conversationHistory = [];
+  session.currentFlow = null;
+  session.flowData = {};
+  
+  console.log(`🔄 Chat ${session.chatCount}/3 iniziata per sessione ${session.id}`);
+  
+  return session;
+}
 
-=== ISTRUZIONI COMPORTAMENTALI ===
-1. Rispondi SEMPRE in italiano con tono professionale ma amichevole
-2. Usa emoji appropriate per rendere le risposte più accattivanti
-3. Formatta le risposte con HTML: <br> per andare a capo, <strong> per grassetto
-4. Rispondi SOLO con informazioni presenti nei dati forniti
-5. Se non sai qualcosa, suggerisci di chiamare il numero di telefono
-6. Per domande su altre sedi/città, spiega che c'è solo la sede indicata
+// ==================== AI SYSTEM PROMPT GENERATOR ====================
+function generateOptimizedSystemPrompt(session, companyInfo) {
+  const studio = companyInfo.studio || {};
+  
+  // Prompt più conciso per risparmiare token
+  return `Sei l'assistente di ${studio.nome || 'Studio Dentistico Demo'}.
 
-=== GESTIONE FLOW INTELLIGENTE ===
-Quando l'utente richiede:
+DATI STUDIO:
+- Indirizzo: ${studio.indirizzo || 'Via dei Dentisti 10, Milano (MI)'}
+- Tel: ${studio.telefono || '+39 123 456 7890'}
+- Email: ${studio.email || 'info@studiodemo.it'}
 
-**PRENOTAZIONE APPUNTAMENTO:**
-- Attiva flow "appointment" 
-- Raccogli nell'ordine: nome, telefono, email, tipo_visita, urgenza, note
-- Validazione: nome min 2 caratteri, telefono formato italiano, email valida
-- Al completamento: mostra riepilogo e richiedi consenso GDPR
+REGOLE:
+1. Risposte brevi e dirette
+2. Usa emoji appropriate
+3. HTML: <br>, <strong>
+4. Per prenotazioni raccogli: nome, telefono, email, tipo visita
+5. Solo info veritiere dai dati forniti
 
-**RICHIESTA PREVENTIVO:**
-- Attiva flow "quote" 
-- Raccogli: nome, telefono, email, servizio_interesse, budget_orientativo, note
-- Al completamento: informa che saranno ricontattati entro 24h
+${session.currentFlow ? `FLOW ATTIVO: ${session.currentFlow}` : ''}
 
-**RICHIESTA INFORMAZIONI:**
-- Non serve flow, rispondi direttamente con le informazioni disponibili
-
-=== VALIDAZIONI ===
-- Nome: minimo 2 caratteri, solo lettere e spazi
-- Telefono: formato italiano (+39, 0xx, 3xx) con almeno 9 cifre
-- Email: formato standard con @ e dominio valido
-- Non accettare dati palesemente falsi (es: nome "asdf", telefono "123")
-
-=== ESEMPI DI FLOW ===
-
-**Inizio prenotazione:**
-"📅 Perfetto! Ti aiuto a prenotare un appuntamento.
-Come ti chiami?"
-
-**Raccolta telefono:**
-"📞 Ciao Mario! Qual è il tuo numero di telefono?
-Mi serve per confermare l'appuntamento."
-
-**Completamento:**
-"✅ Riepilogo prenotazione:
-👤 Nome: Mario Rossi
-📞 Telefono: +39 123 456 7890
-📧 Email: mario@email.com
-🦷 Visita: Controllo generale
-⏰ Urgenza: Normale
-
-Ti ricontatteremo entro 24 ore per confermare data e orario.
-
-[Pulsante GDPR da generare]"
-
-=== FORMATO RISPOSTE ===
-- Sempre cordiale e professionale
-- HTML semplice per formattazione
-- Emoji per rendere più amichevole
-- Informazioni chiare e strutturate
-- Call-to-action quando appropriato
-
-Rispondi sempre come se fossi un assistente umano esperto e disponibile.`;
+Rispondi in italiano, professionale ma amichevole.`;
 }
 
 // ==================== FLOW DETECTION ENGINE ====================
@@ -246,7 +229,7 @@ function checkFlowCompletion(session) {
   if (!session.currentFlow) return { complete: false };
   
   const requiredFields = {
-    appointment: ['nome', 'telefono', 'email', 'tipo_visita', 'urgenza'],
+    appointment: ['nome', 'telefono', 'email', 'tipo_visita'],
     quote: ['nome', 'telefono', 'email', 'servizio_interesse']
   };
   
@@ -260,143 +243,6 @@ function checkFlowCompletion(session) {
     progress: `${collected.length}/${required.length}`
   };
 }
-
-// ==================== EMAIL TRANSPORTER ====================
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT || 587,
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-// ==================== MAIN CHAT ENDPOINT ====================
-app.post('/api/chat', async (req, res) => {
-  try {
-    const { message, forceNewSession = false } = req.body;
-    
-    // Reset session if requested
-    if (forceNewSession) {
-      const sessionId = req.headers['x-session-id'] || 'default';
-      sessions.delete(sessionId);
-    }
-    
-    const session = getOrCreateSession(req);
-    const limits = checkSessionLimits(session);
-    
-    console.log(`💬 [${session.id}] Messaggio: "${message.substring(0, 50)}..."`);
-    console.log(`📊 [${session.id}] Token: ${session.tokenCount}, Flow: ${session.currentFlow}`);
-    
-    // Check limits
-    if (limits.tokenLimitReached || limits.sessionExpired) {
-      return res.json({
-        response: "Hai raggiunto il limite di utilizzo. Clicca 'Nuova Chat' per continuare.",
-        limitReached: true,
-        sessionExpired: limits.sessionExpired,
-        resetButton: true
-      });
-    }
-    
-    // Detect flow intent
-    const flowIntent = detectFlowIntent(message, session);
-    
-    // Start new flow if detected
-    if (flowIntent.start) {
-      session.currentFlow = flowIntent.flow;
-      session.flowData = {};
-      console.log(`🔄 [${session.id}] Avviato flow: ${flowIntent.flow}`);
-    }
-    
-    // Generate system prompt with current context
-    const systemPrompt = generateSystemPrompt(session, companyInfo);
-    
-    // Prepare conversation history
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...session.conversationHistory.slice(-8), // Keep last 8 messages
-      { role: 'user', content: message }
-    ];
-    
-    console.log(`🤖 [${session.id}] Chiamata ChatGPT...`);
-    
-    // Call ChatGPT
-    const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4',
-      messages: messages,
-      max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS) || 800,
-      temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.7,
-    });
-    
-    const response = completion.choices[0].message.content;
-    const tokensUsed = completion.usage.total_tokens;
-    
-    console.log(`✅ [${session.id}] Risposta ChatGPT (${tokensUsed} token)`);
-    
-    // Update conversation history
-    session.conversationHistory.push(
-      { role: 'user', content: message },
-      { role: 'assistant', content: response }
-    );
-    session.tokenCount += tokensUsed;
-    
-    // Keep history manageable
-    if (session.conversationHistory.length > 16) {
-      session.conversationHistory = session.conversationHistory.slice(-16);
-    }
-    
-    // Try to extract flow data from user message
-    if (session.currentFlow) {
-      const extractedData = extractFlowData(message, session.currentFlow);
-      if (extractedData) {
-        Object.assign(session.flowData, extractedData);
-        console.log(`📝 [${session.id}] Dati estratti:`, extractedData);
-      }
-    }
-    
-    // Check if flow is complete
-    let flowStatus = null;
-    if (session.currentFlow) {
-      flowStatus = checkFlowCompletion(session);
-      
-      if (flowStatus.complete) {
-        console.log(`✅ [${session.id}] Flow ${session.currentFlow} completato!`);
-        
-        // Send email notification
-        await sendFlowCompletionEmail(session.currentFlow, session.flowData);
-        
-        // Reset flow
-        session.currentFlow = null;
-        session.flowCount++;
-        
-        // Add GDPR button to response if it's an appointment
-        if (session.currentFlow === 'appointment') {
-          response += `\n\n<button id="gdpr-accept-btn" class="gdpr-button">✅ Accetto il trattamento dei dati</button>`;
-        }
-      }
-    }
-    
-    res.json({
-      response: response,
-      tokensUsed: tokensUsed,
-      totalTokens: session.tokenCount,
-      remainingTokens: (parseInt(process.env.MAX_TOKENS_PER_SESSION) || 10000) - session.tokenCount,
-      currentFlow: session.currentFlow,
-      flowData: session.flowData,
-      flowStatus: flowStatus,
-      sessionId: session.id
-    });
-    
-  } catch (error) {
-    console.error('❌ Errore ChatGPT:', error);
-    res.status(500).json({
-      response: "Mi dispiace, sto avendo problemi tecnici. Riprova tra poco o chiamaci direttamente.",
-      error: true,
-      fallback: true
-    });
-  }
-});
 
 // ==================== FLOW DATA EXTRACTION ====================
 function extractFlowData(message, flowType) {
@@ -421,24 +267,25 @@ function extractFlowData(message, flowType) {
   
   // Extract name (if message is likely a name)
   if (nameRegex.test(message.trim()) && message.trim().length >= 2) {
-    // Check if it's likely a name and not a service request
     const lowerMsg = message.toLowerCase();
     if (!lowerMsg.includes('vorrei') && !lowerMsg.includes('voglio') && !lowerMsg.includes('mi serve')) {
       extractedData.nome = message.trim();
     }
   }
   
-  // Flow-specific extraction
-  if (flowType === 'appointment') {
-    if (message.toLowerCase().includes('urgente') || message.toLowerCase().includes('subito')) {
-      extractedData.urgenza = 'urgente';
-    } else if (message.toLowerCase().includes('normale') || message.toLowerCase().includes('routine')) {
-      extractedData.urgenza = 'normale';
-    }
-  }
-  
   return Object.keys(extractedData).length > 0 ? extractedData : null;
 }
+
+// ==================== EMAIL TRANSPORTER ====================
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT || 587,
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
 
 // ==================== EMAIL SENDING ====================
 async function sendFlowCompletionEmail(flowType, flowData) {
@@ -458,11 +305,10 @@ Nome: ${flowData.nome || 'N/A'}
 Telefono: ${flowData.telefono || 'N/A'}
 Email: ${flowData.email || 'N/A'}
 Tipo Visita: ${flowData.tipo_visita || 'N/A'}
-Urgenza: ${flowData.urgenza || 'N/A'}
 Note: ${flowData.note || 'Nessuna nota'}
 
 📅 Data Richiesta: ${new Date().toLocaleString('it-IT')}
-🔗 Fonte: Assistente Digitale Demo
+🔗 Fonte: Assistente Digitale
 
 --
 ${studio.nome || 'Studio Dentistico Demo'}
@@ -476,12 +322,11 @@ ${studio.nome || 'Studio Dentistico Demo'}
 Nome: ${flowData.nome || 'N/A'}
 Telefono: ${flowData.telefono || 'N/A'}
 Email: ${flowData.email || 'N/A'}
-Servizio di Interesse: ${flowData.servizio_interesse || 'N/A'}
-Budget Orientativo: ${flowData.budget_orientativo || 'Non specificato'}
+Servizio: ${flowData.servizio_interesse || 'N/A'}
 Note: ${flowData.note || 'Nessuna nota'}
 
 📅 Data Richiesta: ${new Date().toLocaleString('it-IT')}
-🔗 Fonte: Assistente Digitale Demo
+🔗 Fonte: Assistente Digitale
 
 --
 ${studio.nome || 'Studio Dentistico Demo'}
@@ -510,69 +355,311 @@ ${studio.nome || 'Studio Dentistico Demo'}
   }
 }
 
-// ==================== GDPR ENDPOINT ====================
-app.post('/api/gdpr-consent', (req, res) => {
-  const { consent, sessionId } = req.body;
-  
-  console.log(`📋 Consenso GDPR ricevuto per sessione ${sessionId}: ${consent ? 'ACCETTATO' : 'RIFIUTATO'}`);
-  
-  res.json({
-    success: true,
-    message: consent ? 'Consenso acquisito correttamente' : 'Consenso non fornito'
-  });
-});
-
-// ==================== UTILITY ENDPOINTS ====================
-
-// Reset session
-app.post('/api/reset-session', (req, res) => {
-  const sessionId = req.headers['x-session-id'] || 'default';
-  
-  if (sessions.has(sessionId)) {
-    sessions.delete(sessionId);
-    console.log(`🔄 Sessione resettata: ${sessionId}`);
-  }
-  
-  res.json({ success: true, message: 'Sessione resettata con successo' });
-});
-
-// Session info
-app.get('/api/session-info', (req, res) => {
-  const session = getOrCreateSession(req);
-  const limits = checkSessionLimits(session);
-  
-  res.json({
-    sessionId: session.id,
-    tokenCount: session.tokenCount,
-    flowCount: session.flowCount,
-    currentFlow: session.currentFlow,
-    flowData: session.flowData,
-    maxTokens: parseInt(process.env.MAX_TOKENS_PER_SESSION) || 10000,
-    maxFlows: parseInt(process.env.MAX_FLOWS_PER_SESSION) || 5,
-    limits: limits,
-    createdAt: session.createdAt,
-    lastActivity: session.lastActivity
-  });
-});
+// ==================== API ENDPOINTS ====================
 
 // Company info endpoint
 app.get('/api/company-info', (req, res) => {
-  // Reload company info to get latest changes
-  loadCompanyInfo();
-  res.json(companyInfo);
+  try {
+    res.json(companyInfo);
+    console.log('✅ Company info inviato via API');
+  } catch (error) {
+    console.error('❌ Errore company-info endpoint:', error);
+    res.status(500).json({ error: 'Unable to load company info' });
+  }
 });
 
-// Health check
+// Session info endpoint
+app.get('/api/session-info', (req, res) => {
+  try {
+    const sessionId = req.headers['x-session-id'] || 'default';
+    const session = sessions.get(sessionId);
+    
+    if (!session) {
+      return res.json({
+        sessionId: sessionId,
+        tokenCount: 0,
+        maxTokens: parseInt(process.env.MAX_TOKENS_PER_SESSION) || 8000,
+        currentFlow: null,
+        flowData: {},
+        chatCount: 0,
+        maxChats: parseInt(process.env.MAX_CHATS_PER_SESSION) || 3,
+        totalCost: 0,
+        isNew: true
+      });
+    }
+    
+    res.json({
+      sessionId: session.id,
+      tokenCount: session.tokenCount || 0,
+      maxTokens: parseInt(process.env.MAX_TOKENS_PER_SESSION) || 8000,
+      currentFlow: session.currentFlow,
+      flowData: session.flowData || {},
+      chatCount: session.chatCount || 0,
+      maxChats: parseInt(process.env.MAX_CHATS_PER_SESSION) || 3,
+      totalCost: session.totalCost || 0,
+      currentChatCost: session.currentChatCost || 0,
+      lastActivity: session.lastActivity,
+      isExpired: session.isExpired || false
+    });
+    
+    console.log(`✅ Session info inviato per: ${sessionId}`);
+    
+  } catch (error) {
+    console.error('❌ Errore session-info endpoint:', error);
+    res.status(500).json({ 
+      error: 'Unable to load session info',
+      sessionId: req.headers['x-session-id'] || 'default',
+      tokenCount: 0,
+      maxTokens: 8000
+    });
+  }
+});
+
+// Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    model: process.env.OPENAI_MODEL || 'gpt-4',
-    maxTokensPerSession: process.env.MAX_TOKENS_PER_SESSION || 10000,
+    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    maxTokensPerSession: process.env.MAX_TOKENS_PER_SESSION || 8000,
+    maxChatsPerSession: process.env.MAX_CHATS_PER_SESSION || 3,
     maxFlowsPerSession: process.env.MAX_FLOWS_PER_SESSION || 5,
     activeSessions: sessions.size,
-    companyInfoLoaded: Object.keys(companyInfo).length > 0
+    companyInfoLoaded: Object.keys(companyInfo).length > 0,
+    emailConfigured: !!(process.env.SMTP_USER && process.env.SMTP_PASS),
+    openaiConfigured: !!process.env.OPENAI_API_KEY
   });
+});
+
+// GDPR consent endpoint
+app.post('/api/gdpr-consent', async (req, res) => {
+  try {
+    const { consent, sessionId } = req.body;
+    const actualSessionId = req.headers['x-session-id'] || sessionId || 'default';
+    
+    if (consent) {
+      console.log(`✅ Consenso GDPR ricevuto per sessione: ${actualSessionId}`);
+      
+      const timestamp = new Date().toISOString();
+      console.log(`📝 GDPR Consent: ${actualSessionId} at ${timestamp}`);
+      
+      res.json({ 
+        success: true, 
+        message: 'Consenso GDPR registrato',
+        sessionId: actualSessionId,
+        timestamp: timestamp
+      });
+    } else {
+      res.json({ 
+        success: false, 
+        message: 'Consenso GDPR non fornito' 
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Errore GDPR consent:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Errore durante registrazione consenso' 
+    });
+  }
+});
+
+// Reset session endpoint
+app.post('/api/reset-session', (req, res) => {
+  const sessionId = req.headers['x-session-id'] || 'default';
+  
+  if (sessions.has(sessionId)) {
+    const session = sessions.get(sessionId);
+    resetCurrentChat(session);
+    
+    console.log(`🔄 Chat resettata: ${sessionId} (Chat ${session.chatCount}/3)`);
+    
+    res.json({ 
+      success: true, 
+      message: `Chat ${session.chatCount}/3 iniziata`,
+      chatInfo: {
+        currentChat: session.chatCount,
+        maxChats: 3,
+        remainingChats: 3 - session.chatCount
+      }
+    });
+  } else {
+    res.json({ success: true, message: 'Nuova sessione creata' });
+  }
+});
+
+// ==================== MAIN CHAT ENDPOINT ====================
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { message, forceNewSession = false } = req.body;
+    
+    // Reset session if requested
+    if (forceNewSession) {
+      const sessionId = req.headers['x-session-id'] || 'default';
+      const oldSession = sessions.get(sessionId);
+      if (oldSession) {
+        resetCurrentChat(oldSession);
+      }
+    }
+    
+    const session = getOrCreateSession(req);
+    
+    // Inizializza costo chat corrente se non esiste
+    if (session.currentChatCost === undefined) {
+      session.currentChatCost = 0;
+    }
+    
+    const limits = checkSessionLimits(session);
+    
+    console.log(`💬 [${session.id}] Chat ${session.chatCount + 1}/3 - Messaggio: "${message.substring(0, 50)}..."`);
+    console.log(`💰 [${session.id}] Costo chat: $${limits.currentChatCost.toFixed(4)}, Chat rimanenti: ${limits.remainingChats}`);
+    
+    // Se OpenAI non è configurato
+    if (!openai) {
+      return res.json({
+        response: "🤖 Servizio AI non configurato. Contatta l'amministratore.",
+        error: true
+      });
+    }
+    
+    // Check limits
+    if (limits.chatLimitReached) {
+      return res.json({
+        response: `🚫 <strong>Limite raggiunto!</strong><br>
+                   Hai utilizzato tutte le 3 chat disponibili per questa sessione.<br><br>
+                   💰 Budget utilizzato: €${(session.totalCost * 0.92).toFixed(3)}<br>
+                   📞 Per continuare, contattaci: ${companyInfo.studio?.telefono || '+39 123 456 7890'}`,
+        limitReached: true,
+        chatLimitReached: true
+      });
+    }
+    
+    if (limits.costLimitReached) {
+      // Avvia nuova chat automaticamente
+      resetCurrentChat(session);
+      
+      if (session.chatCount >= 3) {
+        return res.json({
+          response: `💰 <strong>Budget esaurito!</strong><br>
+                     Limite sessione raggiunto (3 chat utilizzate).<br>
+                     📞 Contattaci: ${companyInfo.studio?.telefono || '+39 123 456 7890'}`,
+          limitReached: true,
+          chatLimitReached: true
+        });
+      }
+      
+      return res.json({
+        response: `💰 <strong>Budget chat esaurito!</strong><br>
+                   ✅ <strong>Nuova chat avviata!</strong> (${session.chatCount}/3)<br><br>
+                   Riprova il tuo messaggio.`,
+        newChatStarted: true,
+        chatInfo: {
+          currentChat: session.chatCount,
+          maxChats: 3,
+          remainingChats: 3 - session.chatCount
+        }
+      });
+    }
+    
+    // Detect flow intent
+    const flowIntent = detectFlowIntent(message, session);
+    
+    // Start new flow if detected
+    if (flowIntent.start) {
+      session.currentFlow = flowIntent.flow;
+      session.flowData = {};
+      console.log(`🔄 [${session.id}] Avviato flow: ${flowIntent.flow}`);
+    }
+    
+    // Generate system prompt
+    const systemPrompt = generateOptimizedSystemPrompt(session, companyInfo);
+    
+    // Prepare conversation history
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...session.conversationHistory.slice(-6), // Meno storia per risparmiare
+      { role: 'user', content: message }
+    ];
+    
+    console.log(`🤖 [${session.id}] Chiamata GPT-4o-mini...`);
+    
+    // Call ChatGPT
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: messages,
+      max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS) || 800,
+      temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.7,
+    });
+    
+    const response = completion.choices[0].message.content;
+    const inputTokens = completion.usage.prompt_tokens;
+    const outputTokens = completion.usage.completion_tokens;
+    const totalTokens = completion.usage.total_tokens;
+    
+    // Calcola costo preciso
+    const costThisCall = calculateCost(inputTokens, outputTokens);
+    session.currentChatCost += costThisCall;
+    session.totalCost += costThisCall;
+    
+    console.log(`✅ [${session.id}] Risposta GPT-4o-mini (${totalTokens} token, $${costThisCall.toFixed(4)})`);
+    
+    // Update conversation history
+    session.conversationHistory.push(
+      { role: 'user', content: message },
+      { role: 'assistant', content: response }
+    );
+    session.tokenCount += totalTokens;
+    
+    // Keep history shorter for cost efficiency
+    if (session.conversationHistory.length > 12) {
+      session.conversationHistory = session.conversationHistory.slice(-12);
+    }
+    
+    // Flow handling
+    if (session.currentFlow) {
+      const extractedData = extractFlowData(message, session.currentFlow);
+      if (extractedData) {
+        Object.assign(session.flowData, extractedData);
+      }
+      
+      const flowStatus = checkFlowCompletion(session);
+      if (flowStatus.complete) {
+        await sendFlowCompletionEmail(session.currentFlow, session.flowData);
+        session.currentFlow = null;
+        session.flowCount++;
+      }
+    }
+    
+    res.json({
+      response: response,
+      tokensUsed: totalTokens,
+      totalTokens: session.tokenCount,
+      remainingTokens: (parseInt(process.env.MAX_TOKENS_PER_SESSION) || 8000) - session.tokenCount,
+      currentFlow: session.currentFlow,
+      flowData: session.flowData,
+      sessionId: session.id,
+      costInfo: {
+        thisCall: costThisCall,
+        currentChatCost: session.currentChatCost,
+        totalSessionCost: session.totalCost,
+        remainingBudget: parseFloat(process.env.MAX_COST_PER_CHAT) - session.currentChatCost
+      },
+      chatInfo: {
+        currentChat: session.chatCount || 1,
+        maxChats: parseInt(process.env.MAX_CHATS_PER_SESSION) || 3,
+        remainingChats: (parseInt(process.env.MAX_CHATS_PER_SESSION) || 3) - (session.chatCount || 0)
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Errore ChatGPT:', error);
+    
+    res.status(500).json({
+      response: `🤖 Mi dispiace, sto avendo problemi tecnici.<br>📞 Per assistenza: ${companyInfo.studio?.telefono || '+39 123 456 7890'}`,
+      error: true
+    });
+  }
 });
 
 // ==================== STATIC FILES ====================
@@ -593,7 +680,7 @@ app.use((error, req, res, next) => {
 // ==================== SESSION CLEANUP ====================
 setInterval(() => {
   const now = Date.now();
-  const timeoutMs = (parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 30) * 60 * 1000;
+  const timeoutMs = (parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 45) * 60 * 1000;
   
   for (const [sessionId, session] of sessions.entries()) {
     if (now - session.lastActivity.getTime() > timeoutMs) {
@@ -606,14 +693,16 @@ setInterval(() => {
 // ==================== SERVER START ====================
 app.listen(port, '0.0.0.0', () => {
   console.log('🚀 ===================================');
-  console.log(`🚀 SERVER CHATGPT + FLOW AVVIATO`);
+  console.log(`🚀 ASSISTENTE DIGITALE AVVIATO`);
   console.log('🚀 ===================================');
-  console.log(`🌐 URL: ${process.env.NODE_ENV === 'production' ? 'https://assistente-digitale-studio-dentistico.onrender.com' : `http://localhost:${port}`}`);
-  console.log(`🤖 Modello ChatGPT: ${process.env.OPENAI_MODEL || 'gpt-4'}`);
-  console.log(`📊 Max token/sessione: ${process.env.MAX_TOKENS_PER_SESSION || 10000}`);
-  console.log(`🔄 Max flow/sessione: ${process.env.MAX_FLOWS_PER_SESSION || 5}`);
-  console.log(`📋 Company info: ${Object.keys(companyInfo).length} sezioni caricate`);
-  console.log(`📧 Email mode: ${process.env.NODE_ENV === 'development' ? 'SVILUPPO' : 'PRODUZIONE'}`);
+  console.log(`🌐 URL: ${process.env.NODE_ENV === 'production' ? 'https://assistente-digitale.it/studio-dentistico-demo' : `http://localhost:${port}`}`);
+  console.log(`🤖 Modello: ${process.env.OPENAI_MODEL || 'gpt-4o-mini'}`);
+  console.log(`📊 Token/sessione: ${process.env.MAX_TOKENS_PER_SESSION || 8000}`);
+  console.log(`💬 Chat/sessione: ${process.env.MAX_CHATS_PER_SESSION || 3}`);
+  console.log(`💰 Budget/chat: €${((parseFloat(process.env.MAX_COST_PER_CHAT) || 0.05) * 0.92).toFixed(3)}`);
+  console.log(`📋 Company info: ${Object.keys(companyInfo).length} sezioni`);
+  console.log(`📧 Email: ${process.env.NODE_ENV === 'development' ? 'SVILUPPO' : 'PRODUZIONE'}`);
+  console.log(`🔑 OpenAI: ${openai ? 'CONFIGURATO' : 'NON CONFIGURATO'}`);
   console.log('🚀 ===================================');
 });
 

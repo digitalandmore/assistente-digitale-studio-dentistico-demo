@@ -5,7 +5,7 @@ let conversationState = {
   currentFlow: null,
   flowData: {},
   tokenCount: 0,
-  maxTokens: 10000
+  maxTokens: 8000
 };
 
 // ==================== INITIALIZATION ====================
@@ -17,14 +17,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('✅ Dati studio caricati via API');
   } catch (error) {
     console.error('❌ Errore caricamento dati:', error);
-    // Fallback: prova a caricare il file JSON direttamente
-    try {
-      const fallbackResponse = await fetch('company-info.json');
-      studioInfo = await fallbackResponse.json();
-      console.log('✅ Dati studio caricati via fallback');
-    } catch (fallbackError) {
-      console.error('❌ Errore fallback:', fallbackError);
-    }
   }
   
   await showWelcomeMessage();
@@ -125,16 +117,10 @@ async function sendMessage() {
   
   if (!message) return;
   
-  // Check token limits
-  if (conversationState.tokenCount >= conversationState.maxTokens) {
-    await appendMessage('bot', '⚠️ Hai raggiunto il limite di utilizzo. <button onclick="resetSession()" class="reset-btn">🔄 Nuova Chat</button>');
-    return;
-  }
-  
   input.value = '';
   await appendMessage('user', message);
   
-  // Send to ChatGPT via server
+  // Send to AI
   const response = await sendToAI(message);
   await appendMessage('bot', response.response);
   
@@ -161,14 +147,20 @@ async function sendToAI(message) {
     
     if (data.limitReached) {
       return {
-        response: data.response + ' <button onclick="resetSession()" class="reset-btn">🔄 Nuova Chat</button>',
+        response: data.response + `
+          <div class="limit-reached-container">
+            <button onclick="resetSession()" class="elegant-reset-btn">
+              🔄 Nuova Chat
+            </button>
+          </div>
+        `,
         limitReached: true
       };
     }
     
-    console.log('✅ Risposta ChatGPT ricevuta');
+    console.log('✅ Risposta AI ricevuta');
     console.log('📊 Token usati:', data.tokensUsed);
-    console.log('🔄 Flow attivo:', data.currentFlow);
+    console.log('💰 Costo:', data.costInfo?.thisCall?.toFixed(4) || 'N/A');
     
     return data;
     
@@ -193,8 +185,8 @@ function updateSessionState(response) {
   }
   
   updateTokenDisplay();
+  updateCostDisplay(response.costInfo);
   
-  // Setup GDPR button if present
   if (response.response && response.response.includes('gdpr-accept-btn')) {
     setTimeout(setupGDPRButton, 500);
   }
@@ -205,19 +197,42 @@ function updateTokenDisplay() {
   const percentage = (conversationState.tokenCount / conversationState.maxTokens) * 100;
   
   console.log(`📊 Token: ${conversationState.tokenCount}/${conversationState.maxTokens} (${percentage.toFixed(1)}%)`);
+}
+
+function updateCostDisplay(costInfo) {
+  if (!costInfo) return;
   
-  // Visual indicator if approaching limit
-  if (percentage > 80) {
+  const remainingBudget = costInfo.remainingBudget;
+  const totalCost = costInfo.currentChatCost;
+  const model = 'gpt-4o-mini';
+  
+  const chatBody = document.getElementById('chat-body');
+  if (!chatBody) return;
+  
+  // Rimuovi indicatori precedenti
+  document.querySelectorAll('.budget-indicator, .cost-warning, .cost-critical').forEach(el => el.remove());
+  
+  if (remainingBudget < 0.01) {
     const indicator = document.createElement('div');
-    indicator.className = 'token-warning';
-    indicator.innerHTML = `⚠️ Token quasi esauriti: ${remainingTokens} rimasti`;
-    indicator.style.cssText = 'background: #fff3cd; padding: 8px; margin: 8px 0; border-radius: 4px; font-size: 12px;';
-    
-    const chatBody = document.getElementById('chat-body');
-    if (chatBody && !chatBody.querySelector('.token-warning')) {
-      chatBody.appendChild(indicator);
-    }
+    indicator.className = 'cost-critical';
+    indicator.innerHTML = `
+      🚨 <strong>Budget quasi esaurito!</strong><br>
+      💰 Costo: €${(totalCost * 0.92).toFixed(3)} / €0.046<br>
+      🤖 Modello: ${model}
+    `;
+    chatBody.appendChild(indicator);
+  } else if (remainingBudget < 0.02) {
+    const indicator = document.createElement('div');
+    indicator.className = 'cost-warning';
+    indicator.innerHTML = `
+      ⚠️ <strong>Budget in esaurimento</strong><br>
+      💰 Rimangono: €${(remainingBudget * 0.92).toFixed(3)}<br>
+      🤖 Modello: ${model}
+    `;
+    chatBody.appendChild(indicator);
   }
+  
+  chatBody.scrollTop = chatBody.scrollHeight;
 }
 
 // ==================== SESSION MANAGEMENT ====================
@@ -230,19 +245,16 @@ async function resetSession() {
       }
     });
     
-    // Clear chat
     const chatBody = document.getElementById('chat-body');
     if (chatBody) {
       chatBody.innerHTML = '';
     }
     
-    // Generate new session ID
     conversationState.sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     conversationState.tokenCount = 0;
     conversationState.currentFlow = null;
     conversationState.flowData = {};
     
-    // Restart welcome
     await showWelcomeMessage();
     
     console.log('🔄 Sessione resettata');
@@ -257,7 +269,6 @@ async function appendMessage(type, message) {
   const chatBody = document.getElementById('chat-body');
   if (!chatBody) return;
   
-  // Remove typing indicator
   const typingIndicator = chatBody.querySelector('.typing-indicator');
   if (typingIndicator) {
     typingIndicator.remove();
@@ -270,12 +281,10 @@ async function appendMessage(type, message) {
   chatBody.appendChild(messageDiv);
   chatBody.scrollTop = chatBody.scrollHeight;
   
-  // Sync with mobile if open
   if (window.mobileChat?.isOpen) {
     syncToMobile(type, message);
   }
   
-  // Setup button listeners for new content
   setTimeout(() => {
     setupDynamicButtonListeners(messageDiv);
   }, 100);
@@ -317,7 +326,6 @@ function syncToMobile(type, message) {
 
 // ==================== DYNAMIC BUTTON HANDLERS ====================
 function setupDynamicButtonListeners(container) {
-  // GDPR buttons
   const gdprButtons = container.querySelectorAll('#gdpr-accept-btn');
   gdprButtons.forEach(btn => {
     if (!btn.hasAttribute('data-listener-added')) {
@@ -326,8 +334,7 @@ function setupDynamicButtonListeners(container) {
     }
   });
   
-  // Reset buttons
-  const resetButtons = container.querySelectorAll('.reset-btn');
+  const resetButtons = container.querySelectorAll('.elegant-reset-btn');
   resetButtons.forEach(btn => {
     if (!btn.hasAttribute('data-listener-added')) {
       btn.setAttribute('data-listener-added', 'true');
@@ -335,7 +342,6 @@ function setupDynamicButtonListeners(container) {
     }
   });
   
-  // Option buttons (if any new ones are dynamically created)
   const optionButtons = container.querySelectorAll('.chat-option-btn[data-action]');
   optionButtons.forEach(btn => {
     if (!btn.hasAttribute('data-listener-added')) {
@@ -347,16 +353,6 @@ function setupDynamicButtonListeners(container) {
       });
     }
   });
-}
-
-function setupGDPRButton() {
-  setTimeout(() => {
-    const gdprBtn = document.getElementById('gdpr-accept-btn');
-    if (gdprBtn && !gdprBtn.hasAttribute('data-listener-added')) {
-      gdprBtn.setAttribute('data-listener-added', 'true');
-      gdprBtn.addEventListener('click', handleGDPRConsent);
-    }
-  }, 100);
 }
 
 async function handleGDPRConsent(event) {
@@ -414,10 +410,8 @@ async function sendMobileMessage() {
   
   mobileInput.value = '';
   
-  // Add to mobile chat
   await appendMessage('user', message);
   
-  // Send to AI
   const response = await sendToAI(message);
   await appendMessage('bot', response.response);
   
