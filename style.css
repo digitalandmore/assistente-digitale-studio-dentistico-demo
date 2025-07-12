@@ -54,9 +54,9 @@ body {
   width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 9998;
+  z-index: 9998; /* CAMBIATO da 999 a 9998 */
   backdrop-filter: blur(2px);
-  pointer-events: auto;
+  pointer-events: auto; /* AGGIUNTO per garantire i click */
 }
 
 /* ==================== MAIN LAYOUT ==================== */
@@ -177,7 +177,6 @@ body {
   cursor: pointer;
   transition: var(--transition);
   border: 2px solid var(--primary-color);
-  text-decoration: none;
 }
 
 .branding .photos .more:hover {
@@ -303,93 +302,6 @@ body {
   transform: scale(1.1);
 }
 
-/* ==================== CHAT ASSISTANT BUTTON ==================== */
-.chat-assistant-btn {
-  display: none !important; /* Nascosto di default */
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)) !important;
-  color: white !important;
-  border: 2px solid var(--primary-color) !important;
-  position: relative;
-  overflow: hidden;
-}
-
-.chat-assistant-btn::before {
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent) !important;
-}
-
-.chat-assistant-btn:hover {
-  background: linear-gradient(135deg, var(--primary-dark), #003d7a) !important;
-  color: white !important;
-  border-color: var(--primary-dark) !important;
-  transform: translateY(-3px) !important;
-  box-shadow: 0 8px 25px rgba(0, 119, 204, 0.4) !important;
-}
-
-.chat-assistant-btn .assistant-icon {
-  width: 20px !important;
-  height: 20px !important;
-  border-radius: 50% !important;
-  object-fit: cover !important;
-  border: 2px solid rgba(255, 255, 255, 0.3) !important;
-  transition: var(--transition) !important;
-}
-
-.chat-assistant-btn:hover .assistant-icon {
-  transform: scale(1.1) !important;
-  border-color: rgba(255, 255, 255, 0.6) !important;
-}
-
-/* ==================== MOBILE ONLY VISIBILITY ==================== */
-@media (max-width: 768px) {
-  .chat-assistant-btn {
-    display: flex !important; /* Mostra solo su mobile */
-    animation: slideInUp 0.5s ease-out 0.3s both;
-  }
-  
-  @keyframes slideInUp {
-    from {
-      opacity: 0;
-      transform: translateY(30px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  /* Effetto pulse per attirare attenzione */
-  .chat-assistant-btn::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 100%;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: var(--radius-md);
-    transform: translate(-50%, -50%) scale(0);
-    animation: pulseEffect 3s infinite;
-  }
-  
-  @keyframes pulseEffect {
-    0%, 70%, 100% {
-      transform: translate(-50%, -50%) scale(0);
-      opacity: 1;
-    }
-    35% {
-      transform: translate(-50%, -50%) scale(1.1);
-      opacity: 0;
-    }
-  }
-}
-
-/* Assicura che sia nascosto su desktop */
-@media (min-width: 769px) {
-  .chat-assistant-btn {
-    display: none !important;
-  }
-}
-
 /* ==================== CHAT WINDOW ==================== */
 .chat-window {
   flex: 1;
@@ -404,8 +316,9 @@ body {
   overflow: hidden;
   position: sticky;
   top: 20px;
-  z-index: 10;
+  z-index: 10; /* AGGIUNTO per controllare lo stacking */
 }
+
 
 .chat-header {
   background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
@@ -621,90 +534,6 @@ body {
   border-color: #ccc;
 }
 
-/* ==================== LOAD MORE BUTTON ==================== */
-.load-more-btn {
-  align-self: center;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, var(--primary-light) 0%, #e3f2fd 100%);
-  color: var(--primary-color);
-  border: 1px solid var(--primary-color);
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition);
-  box-shadow: var(--shadow-sm);
-  margin: 8px 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  position: relative;
-  overflow: hidden;
-  min-width: 180px;
-}
-
-.load-more-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-  transition: left 0.5s ease;
-}
-
-.load-more-btn:hover::before {
-  left: 100%;
-}
-
-.load-more-btn:hover {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-  color: white;
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--primary-dark);
-}
-
-.load-more-btn:disabled {
-  background: #f8f9fa;
-  color: #adb5bd;
-  cursor: not-allowed;
-  opacity: 0.6;
-  transform: none;
-  border-color: #dee2e6;
-  box-shadow: none;
-}
-
-.load-more-btn:disabled::before {
-  display: none;
-}
-
-.load-more-btn i {
-  font-size: 14px;
-  transition: var(--transition);
-}
-
-.load-more-btn:hover:not(:disabled) i {
-  transform: scale(1.1);
-}
-
-.load-more-btn.loading {
-  pointer-events: none;
-  background: linear-gradient(135deg, var(--primary-light) 0%, #e3f2fd 100%);
-  color: var(--primary-color);
-}
-
-.load-more-btn.loading i {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 /* ==================== POPUP BASE ==================== */
 .info-popup {
   display: none;
@@ -716,13 +545,13 @@ body {
   padding: 28px;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xl);
-  z-index: 9999;
+  z-index: 9999; /* CAMBIATO da 1001 a 9999 */
   max-width: 90vw;
   max-height: 90vh;
   overflow-y: auto;
   text-align: center;
   animation: popupShow 0.3s ease-out;
-  pointer-events: auto;
+  pointer-events: auto; /* AGGIUNTO per garantire l'interazione */
 }
 
 @keyframes popupShow {
@@ -938,12 +767,13 @@ body {
   display: block;
 }
 
-/* ==================== POPUP ORARI & TAB SYSTEM ==================== */
+/* ==================== POPUP ORARI ==================== */
 #popup-orari {
   width: 90vw;
   max-width: 700px;
 }
 
+/* ==================== TAB SYSTEM ==================== */
 .tab-container {
   margin-bottom: 24px;
 }
@@ -1246,6 +1076,7 @@ body {
   font-size: 10px;
 }
 
+/* Tooltip */
 .calendar-day[data-tooltip] {
   position: relative;
 }
@@ -1262,7 +1093,7 @@ body {
   border-radius: 6px;
   font-size: 11px;
   white-space: nowrap;
-  z-index: 10001;
+  z-index: 10001; /* AUMENTATO per stare sopra i popup */
   box-shadow: var(--shadow-md);
 }
 
@@ -1274,9 +1105,10 @@ body {
   transform: translateX(-50%);
   border: 4px solid transparent;
   border-top-color: var(--secondary-color);
-  z-index: 10001;
+  z-index: 10001; /* AUMENTATO per stare sopra i popup */
 }
 
+/* Legenda calendario */
 .calendar-legend {
   display: flex;
   justify-content: center;
@@ -1546,7 +1378,7 @@ body {
   color: var(--primary-dark);
 }
 
-/* ==================== RESPONSIVE DESIGN ==================== */
+/* ==================== RESPONSIVE ==================== */
 @media (max-width: 1024px) {
   .main-content {
     padding: 16px;
@@ -1566,7 +1398,6 @@ body {
   .main-content {
     flex-direction: column;
     padding: 12px;
-    gap: 12px;
   }
   
   .sidebar {
@@ -1574,72 +1405,36 @@ body {
     margin-bottom: 16px;
     position: static;
     max-height: none;
-    order: 2;
   }
   
   .chat-window {
-    height: 70vh;
+    height: 500px;
     min-width: unset;
     max-width: unset;
-    width: 100%;
     position: static;
-    order: 1;
-    margin-bottom: 16px;
-  }
-  
-  .chat-body {
-    padding: 12px;
-    gap: 8px;
-    min-height: calc(70vh - 140px);
-  }
-  
-  .chat-input {
-    padding: 12px;
-    gap: 8px;
-  }
-  
-  .chat-input input {
-    padding: 10px 14px;
-    font-size: 16px;
-  }
-  
-  .chat-input button {
-    padding: 10px 16px;
-    font-size: 14px;
   }
   
   .message {
-    max-width: 90%;
-    padding: 10px 14px;
-    font-size: 14px;
-    line-height: 1.4;
-    margin-bottom: 4px;
-  }
-  
-  .chat-header {
-    padding: 12px 16px;
-    font-size: 15px;
-  }
-  
-  .chat-header img {
-    width: 36px;
-    height: 36px;
-  }
-  
-  .info-popup {
-    width: 95% !important;
-    max-width: none !important;
-    padding: 16px !important;
-    margin: 10px !important;
-    max-height: 80vh !important;
-    border-radius: 12px !important;
+    max-width: 95%;
   }
   
   .footer-info {
     flex-direction: column;
-    gap: 16px;
-    padding: 16px;
-    min-height: 120px;
+    gap: 20px;
+    padding: 20px;
+  }
+  
+  .footer-right img {
+    margin-bottom: 12px;
+  }
+  
+  /* Popup responsive */
+  .info-popup {
+    width: 95% !important;
+    max-width: none !important;
+    padding: 20px !important;
+    margin: 20px;
+    max-height: 85vh;
   }
   
   .specialties-grid {
@@ -1687,6 +1482,7 @@ body {
     margin-bottom: 8px;
   }
   
+  /* Calendario mobile */
   .calendar-container {
     padding: 16px;
   }
@@ -1721,99 +1517,31 @@ body {
     flex-direction: column;
     align-items: center;
   }
-  
-  .load-more-btn {
-    padding: 8px 16px;
-    font-size: 12px;
-    min-width: 160px;
-    margin: 6px 0;
-  }
-  
-  .load-more-btn i {
-    font-size: 12px;
-  }
-  
-  .chat-input button,
-  .info-buttons button,
-  .close-btn,
-  .tab-button {
-    min-height: 44px;
-  }
-  
-  .chat-option-btn {
-    min-height: 40px;
-    padding: 8px 14px;
-  }
 }
 
 @media (max-width: 480px) {
   .main-content {
     padding: 8px;
-    gap: 8px;
-  }
-  
-  .chat-window {
-    height: 65vh;
-    border-radius: 16px;
-  }
-  
-  .chat-body {
-    padding: 10px;
-    gap: 6px;
-    min-height: calc(65vh - 130px);
-  }
-  
-  .chat-input {
-    padding: 10px;
-  }
-  
-  .chat-input input {
-    padding: 8px 12px;
-    font-size: 16px;
-  }
-  
-  .chat-input button {
-    padding: 8px 14px;
-  }
-  
-  .message {
-    max-width: 88%;
-    padding: 8px 12px;
-    font-size: 13px;
-  }
-  
-  .chat-header {
-    padding: 10px 14px;
-    font-size: 14px;
-  }
-  
-  .chat-header img {
-    width: 32px;
-    height: 32px;
   }
   
   .sidebar {
-    padding: 14px;
-    gap: 10px;
-    border-radius: 16px;
+    padding: 16px;
+    gap: 12px;
   }
   
   .branding .photos img,
   .branding .photos .more {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
   }
   
-  .info-buttons button {
-    padding: 12px 16px;
-    font-size: 14px;
+  .chat-window {
+    height: 450px;
   }
   
   .info-popup {
-    width: 98% !important;
-    padding: 12px !important;
-    margin: 5px !important;
-    max-height: 75vh !important;
+    padding: 16px !important;
+    margin: 10px;
   }
   
   .calendar-day {
@@ -1840,7 +1568,125 @@ body {
   .specialty .icon {
     font-size: 28px;
   }
+}
+
+@media (max-width: 360px) {
+  .calendar-day {
+    min-height: 28px;
+    font-size: 11px;
+  }
   
+  .calendar-nav {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+  
+  .calendar-month-year {
+    font-size: 14px;
+    margin: 0 8px;
+  }
+}
+/* ==================== LOAD MORE BUTTON ==================== */
+.load-more-btn {
+  align-self: center;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, var(--primary-light) 0%, #e3f2fd 100%);
+  color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: var(--shadow-sm);
+  margin: 8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  min-width: 180px;
+}
+
+.load-more-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.load-more-btn:hover::before {
+  left: 100%;
+}
+
+.load-more-btn:hover {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-dark);
+}
+
+.load-more-btn:disabled {
+  background: #f8f9fa;
+  color: #adb5bd;
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+  border-color: #dee2e6;
+  box-shadow: none;
+}
+
+.load-more-btn:disabled::before {
+  display: none;
+}
+
+.load-more-btn i {
+  font-size: 14px;
+  transition: var(--transition);
+}
+
+.load-more-btn:hover:not(:disabled) i {
+  transform: scale(1.1);
+}
+
+/* Animazione di caricamento per il pulsante */
+.load-more-btn.loading {
+  pointer-events: none;
+  background: linear-gradient(135deg, var(--primary-light) 0%, #e3f2fd 100%);
+  color: var(--primary-color);
+}
+
+.load-more-btn.loading i {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ==================== RESPONSIVE LOAD MORE ==================== */
+@media (max-width: 768px) {
+  .load-more-btn {
+    padding: 8px 16px;
+    font-size: 12px;
+    min-width: 160px;
+    margin: 6px 0;
+  }
+  
+  .load-more-btn i {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
   .load-more-btn {
     padding: 8px 14px;
     font-size: 11px;
@@ -1853,9 +1699,171 @@ body {
   }
 }
 
+/* ==================== RESPONSIVE CHAT FIXES ==================== */
+@media (max-width: 768px) {
+  .main-content {
+    flex-direction: column;
+    padding: 12px;
+    gap: 12px; /* Ridotto gap */
+  }
+  
+  .sidebar {
+    width: 100%;
+    margin-bottom: 16px;
+    position: static;
+    max-height: none;
+    order: 2; /* AGGIUNTO: Mette la chat prima della sidebar */
+  }
+  
+  .chat-window {
+    height: 70vh; /* CAMBIATO da 500px a 70vh per essere più responsive */
+    min-width: unset;
+    max-width: unset;
+    width: 100%; /* AGGIUNTO: Assicura che occupi tutta la larghezza */
+    position: static;
+    order: 1; /* AGGIUNTO: Mette la chat sopra la sidebar */
+    margin-bottom: 16px; /* AGGIUNTO: Spazio sotto la chat */
+  }
+  
+  /* FIX CHAT BODY MOBILE */
+  .chat-body {
+    padding: 12px; /* Ridotto padding */
+    gap: 8px; /* Ridotto gap tra messaggi */
+    min-height: calc(70vh - 140px); /* AGGIUNTO: Calcola altezza corretta */
+  }
+  
+  /* FIX CHAT INPUT MOBILE */
+  .chat-input {
+    padding: 12px; /* Ridotto padding */
+    gap: 8px; /* Ridotto gap */
+  }
+  
+  .chat-input input {
+    padding: 10px 14px; /* Ridotto padding */
+    font-size: 16px; /* CAMBIATO: Evita zoom su iOS */
+  }
+  
+  .chat-input button {
+    padding: 10px 16px; /* Ridotto padding */
+    font-size: 14px; /* AGGIUNTO: Dimensione testo */
+  }
+  
+  /* FIX MESSAGGI MOBILE */
+  .message {
+    max-width: 90%; /* CAMBIATO da 95% a 90% */
+    padding: 10px 14px; /* Ridotto padding */
+    font-size: 14px; /* AGGIUNTO: Dimensione testo esplicita */
+    line-height: 1.4; /* AGGIUNTO: Line height ottimizzata */
+    margin-bottom: 4px; /* AGGIUNTO: Spazio tra messaggi */
+  }
+  
+  /* FIX HEADER CHAT MOBILE */
+  .chat-header {
+    padding: 12px 16px; /* Ridotto padding */
+    font-size: 15px; /* Ridotta dimensione testo */
+  }
+  
+  .chat-header img {
+    width: 36px; /* Ridotta dimensione */
+    height: 36px; /* Ridotta dimensione */
+  }
+  
+  /* POPUP RESPONSIVE MIGLIORATO */
+  .info-popup {
+    width: 95% !important;
+    max-width: none !important;
+    padding: 16px !important; /* Ridotto padding */
+    margin: 10px !important; /* Ridotto margine */
+    max-height: 80vh !important; /* CAMBIATO da 85vh a 80vh */
+    border-radius: 12px !important; /* Ridotto border radius */
+  }
+  
+  /* FOOTER MOBILE */
+  .footer-info {
+    flex-direction: column;
+    gap: 16px; /* Ridotto gap */
+    padding: 16px; /* Ridotto padding */
+    min-height: 120px; /* Ridotta altezza minima */
+  }
+}
+
+@media (max-width: 480px) {
+  .main-content {
+    padding: 8px;
+    gap: 8px; /* Ulteriormente ridotto */
+  }
+  
+  .chat-window {
+    height: 65vh; /* CAMBIATO per schermo più piccolo */
+    border-radius: 16px; /* Ridotto border radius */
+  }
+  
+  .chat-body {
+    padding: 10px; /* Ulteriormente ridotto */
+    gap: 6px;
+    min-height: calc(65vh - 130px); /* Ricalcolato */
+  }
+  
+  .chat-input {
+    padding: 10px; /* Ulteriormente ridotto */
+  }
+  
+  .chat-input input {
+    padding: 8px 12px; /* Ulteriormente ridotto */
+    font-size: 16px; /* Mantiene 16px per evitare zoom */
+  }
+  
+  .chat-input button {
+    padding: 8px 14px; /* Ulteriormente ridotto */
+  }
+  
+  .message {
+    max-width: 88%; /* Ulteriormente ridotto */
+    padding: 8px 12px; /* Ulteriormente ridotto */
+    font-size: 13px; /* Ridotta dimensione testo */
+  }
+  
+  .chat-header {
+    padding: 10px 14px; /* Ulteriormente ridotto */
+    font-size: 14px; /* Ridotta dimensione */
+  }
+  
+  .chat-header img {
+    width: 32px; /* Ulteriormente ridotta */
+    height: 32px; /* Ulteriormente ridotta */
+  }
+  
+  /* SIDEBAR MOBILE OTTIMIZZATA */
+  .sidebar {
+    padding: 14px; /* Ridotto padding */
+    gap: 10px; /* Ridotto gap */
+    border-radius: 16px; /* Ridotto border radius */
+  }
+  
+  .branding .photos img,
+  .branding .photos .more {
+    width: 36px; /* Ridotte dimensioni */
+    height: 36px; /* Ridotte dimensioni */
+  }
+  
+  .info-buttons button {
+    padding: 12px 16px; /* Ridotto padding */
+    font-size: 14px; /* Ridotta dimensione testo */
+  }
+  
+  /* POPUP EXTRA SMALL */
+  .info-popup {
+    width: 98% !important;
+    padding: 12px !important;
+    margin: 5px !important;
+    max-height: 75vh !important;
+  }
+}
+
+/* ==================== FIX LANDSCAPE MOBILE ==================== */
 @media (max-width: 768px) and (orientation: landscape) {
   .chat-window {
-    height: 85vh;
+    height: 85vh; /* Aumenta altezza in landscape */
   }
   
   .chat-body {
@@ -1863,31 +1871,36 @@ body {
   }
   
   .main-content {
-    flex-direction: row;
+    flex-direction: row; /* Ripristina row in landscape se c'è spazio */
     gap: 12px;
   }
   
   .sidebar {
-    width: 300px;
-    order: 0;
+    width: 300px; /* Larghezza fissa in landscape */
+    order: 0; /* Ripristina ordine normale */
   }
   
   .chat-window {
-    order: 0;
+    order: 0; /* Ripristina ordine normale */
     flex: 1;
     max-width: none;
   }
 }
 
+/* ==================== FIX VERY SMALL SCREENS ==================== */
 @media (max-width: 360px) {
   .chat-window {
-    height: 60vh;
+    height: 60vh; /* Riduce ulteriormente per schermi molto piccoli */
     border-radius: 12px;
   }
   
   .chat-body {
     padding: 8px;
     min-height: calc(60vh - 120px);
+  }
+  
+  .chat-input {
+    padding: 8px;
   }
   
   .message {
@@ -1905,50 +1918,118 @@ body {
     width: 28px;
     height: 28px;
   }
-  
-  .calendar-day {
-    min-height: 28px;
-    font-size: 11px;
+}
+
+/* ==================== FIX TOUCH TARGETS ==================== */
+@media (max-width: 768px) {
+  /* Assicura che tutti i pulsanti siano facilmente toccabili */
+  .chat-input button,
+  .info-buttons button,
+  .close-btn,
+  .tab-button {
+    min-height: 44px; /* Apple raccomanda minimo 44px per touch targets */
   }
   
-  .calendar-nav {
-    width: 32px;
-    height: 32px;
-    font-size: 12px;
+  .chat-option-btn {
+    min-height: 40px;
+    padding: 8px 14px;
   }
-  
-  .calendar-month-year {
-    font-size: 14px;
-    margin: 0 8px;
-  }
+}
+
+/* ==================== CHAT ASSISTANT BUTTON (MOBILE ONLY) ==================== */
+.chat-assistant-btn {
+  display: none !important; /* Nascosto di default */
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)) !important;
+  color: white !important;
+  border: 2px solid var(--primary-color) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.chat-assistant-btn::before {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent) !important;
+}
+
+.chat-assistant-btn:hover {
+  background: linear-gradient(135deg, var(--primary-dark), #003d7a) !important;
+  color: white !important;
+  border-color: var(--primary-dark) !important;
+  transform: translateY(-3px) !important;
+  box-shadow: 0 8px 25px rgba(0, 119, 204, 0.4) !important;
+}
+
+.chat-assistant-btn .assistant-icon {
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  border: 2px solid rgba(255, 255, 255, 0.3) !important;
+  transition: var(--transition) !important;
+  background: white !important; /* AGGIUNTO: Sfondo bianco */
+  padding: 2px !important; /* AGGIUNTO: Padding per dare spazio all'icona */
+}
+
+.chat-assistant-btn:hover .assistant-icon {
+  transform: scale(1.1) !important;
+  border-color: rgba(255, 255, 255, 0.6) !important;
+  background: white !important; /* MANTIENE: Sfondo bianco anche al hover */
 }
 
 /* ==================== MOBILE CHAT WIDGET ==================== */
 @media (max-width: 768px) {
-  .main-content {
-    flex-direction: column;
-    padding: 12px;
-    gap: 12px;
-  }
-  
-  .sidebar {
-    width: 100%;
-    margin-bottom: 16px;
-    position: static;
-    max-height: none;
-    order: 1; /* Sidebar prima */
-  }
-  
-  /* NASCONDE LA CHAT NORMALE SU MOBILE */
+  /* NASCONDE LA CHAT DESKTOP SU MOBILE */
   .chat-window {
-    display: none;
+    display: none !important;
   }
   
-  /* WIDGET CHAT FLOATING */
+  /* MOSTRA IL PULSANTE ASSISTENTE NELLA SIDEBAR */
+  .chat-assistant-btn {
+    display: flex !important;
+    animation: slideInUp 0.5s ease-out 0.3s both;
+    order: -1; /* Lo mette PRIMO nella lista */
+  }
+  
+  @keyframes slideInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* Effetto pulse per attirare attenzione */
+  .chat-assistant-btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    transform: translate(-50%, -50%) scale(0);
+    animation: pulseEffect 3s infinite;
+  }
+  
+  @keyframes pulseEffect {
+    0%, 70%, 100% {
+      transform: translate(-50%, -50%) scale(0);
+      opacity: 1;
+    }
+    35% {
+      transform: translate(-50%, -50%) scale(1.1);
+      opacity: 0;
+    }
+  }
+  
+  /* WIDGET CHAT FLOATING - BASSO DESTRA */
   .chat-widget {
     position: fixed;
     bottom: 20px;
-    left: 20px;
+    right: 20px;
     z-index: 1000;
     cursor: pointer;
     transition: var(--transition);
@@ -1967,7 +2048,7 @@ body {
     cursor: pointer;
     transition: var(--transition);
     position: relative;
-    overflow: hidden;
+    overflow: visible; /* CAMBIATO: da hidden a visible per la notifica */
   }
   
   .chat-widget-button:hover {
@@ -1980,25 +2061,30 @@ body {
     height: 32px;
     border-radius: 50%;
     object-fit: cover;
+    background: white; /* AGGIUNTO: Sfondo bianco */
+    padding: 3px; /* AGGIUNTO: Padding per dare spazio all'icona */
+    border: 2px solid rgba(255, 255, 255, 0.3); /* AGGIUNTO: Bordo */
   }
   
-  /* NOTIFICA BADGE */
+  /* NOTIFICA BADGE - MIGLIORATO POSIZIONAMENTO */
   .chat-notification {
     position: absolute;
-    top: -8px;
-    right: -8px;
+    top: -12px; /* CAMBIATO: da -8px a -12px per essere più visibile */
+    right: -12px; /* CAMBIATO: da -8px a -12px per essere più visibile */
     background: #dc3545;
     color: white;
     border-radius: 50%;
-    width: 24px;
-    height: 24px;
+    width: 26px; /* AUMENTATO: da 24px a 26px */
+    height: 26px; /* AUMENTATO: da 24px a 26px */
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 12px;
     font-weight: 700;
-    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+    box-shadow: 0 3px 10px rgba(220, 53, 69, 0.4); /* MIGLIORATO: shadow più forte */
     animation: pulse-notification 2s infinite;
+    border: 2px solid white; /* AGGIUNTO: Bordo bianco per contrasto */
+    z-index: 1001; /* AGGIUNTO: z-index per stare sopra al widget */
   }
   
   @keyframes pulse-notification {
@@ -2081,6 +2167,8 @@ body {
     height: 32px;
     border-radius: 50%;
     border: 2px solid rgba(255, 255, 255, 0.3);
+    background: white; /* AGGIUNTO: Sfondo bianco */
+    padding: 2px; /* AGGIUNTO: Padding per dare spazio all'icona */
   }
   
   .chat-close-btn {
@@ -2175,40 +2263,11 @@ body {
     background: var(--primary-dark);
     transform: scale(1.05);
   }
-  
-  /* HIDE DESKTOP ELEMENTS ON MOBILE */
-  .footer-info {
-    flex-direction: column;
-    gap: 16px;
-    padding: 16px;
-    min-height: 120px;
-  }
-  
-  .info-popup {
-    width: 95% !important;
-    max-width: none !important;
-    padding: 16px !important;
-    margin: 10px !important;
-    max-height: 80vh !important;
-    border-radius: 12px !important;
-  }
-  
-  /* Nasconde widget su tablet landscape */
-  @media (min-width: 769px) and (orientation: landscape) {
-    .chat-widget,
-    .chat-overlay,
-    .chat-mobile {
-      display: none !important;
-    }
-    
-    .chat-window {
-      display: flex !important;
-    }
-  }
 }
 
-/* ==================== WIDGET SOLO MOBILE ==================== */
+/* Assicura che sia nascosto su desktop */
 @media (min-width: 769px) {
+  .chat-assistant-btn,
   .chat-widget,
   .chat-overlay,
   .chat-mobile {

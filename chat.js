@@ -21,10 +21,6 @@ const MESSAGES_PER_PAGE = 10;
 const LOAD_MORE_THRESHOLD = 8;
 let loadMoreButton = null;
 
-// ==================== API CONFIGURATION ====================
-const API_BASE_URL = window.location.hostname === 'localhost' 
-  ? 'http://localhost:3000' 
-  : 'https://assistente-digitale-studio-dentistico.onrender.com';
 
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', async () => {
