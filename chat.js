@@ -24,7 +24,9 @@ let loadMoreButton = null;
 // ==================== API CONFIGURATION ====================
 const API_BASE_URL = window.location.hostname === 'localhost' 
   ? 'http://localhost:3000' 
-  : 'https://assistente-digitale-studio-dentistico.onrender.com';
+  : window.location.hostname === 'assistente-digitale.it'
+    ? 'https://assistente-digitale.it/studio-dentistico-demo' 
+    : 'https://assistente-digitale-studio-dentistico.onrender.com';
 
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', async () => {
