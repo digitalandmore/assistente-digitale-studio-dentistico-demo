@@ -9,20 +9,68 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// ==================== MIDDLEWARE ====================
+// ==================== MIDDLEWARE CON CORS MULTI-DOMAIN ====================
 app.use(cors({
   origin: [
     'http://localhost:3000',
     'https://assistente-digitale.it',
     'https://www.assistente-digitale.it',
-    'https://assistente-digitale-studio-dentistico.onrender.com'
+    'https://assistente-digitale-studio-dentistico.onrender.com',
+    'https://assistente-digitale.it/studio-dentistico-demo'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id']
 }));
-app.use(express.json());
-app.use(express.static('.'));
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Middleware per logging e redirect intelligente
+app.use((req, res, next) => {
+  const host = req.get('host');
+  const fullPath = req.path;
+  
+  console.log(`${new Date().toISOString()} - ${req.method} ${host}${fullPath}`);
+  
+  // Se è assistente-digitale.it ma NON ha /studio-dentistico-demo, redirect
+  if (host === 'assistente-digitale.it' && !fullPath.startsWith('/studio-dentistico-demo') && fullPath !== '/') {
+    if (fullPath.startsWith('/api/')) {
+      // Per le API, continua normalmente
+      next();
+    } else {
+      // Per le pagine, redirect a /studio-dentistico-demo/
+      return res.redirect(301, `/studio-dentistico-demo${fullPath}`);
+    }
+  } else {
+    next();
+  }
+});
+
+// ==================== SERVE STATIC FILES CON ROUTING INTELLIGENTE ====================
+// Per assistente-digitale.it/studio-dentistico-demo/
+app.use('/studio-dentistico-demo', express.static(__dirname, {
+  dotfiles: 'ignore',
+  etag: false,
+  extensions: ['html', 'js', 'css', 'json'],
+  index: ['index.html'],
+  maxAge: '1d',
+  setHeaders: function (res, path, stat) {
+    res.set('x-timestamp', Date.now());
+  }
+}));
+
+// Per il dominio Render diretto
+app.use(express.static(__dirname, {
+  dotfiles: 'ignore',
+  etag: false,
+  extensions: ['html', 'js', 'css', 'json'],
+  index: ['index.html'],
+  maxAge: '1d',
+  setHeaders: function (res, path, stat) {
+    res.set('x-timestamp', Date.now());
+  }
+}));
 
 // ==================== OPENAI CONFIGURATION ====================
 let openai = null;
@@ -45,7 +93,6 @@ function initializeOpenAI() {
   }
 }
 
-// Inizializza OpenAI all'avvio
 openai = initializeOpenAI();
 
 // ==================== COMPANY INFO LOADER ====================
@@ -53,9 +100,17 @@ let companyInfo = {};
 
 function loadCompanyInfo() {
   try {
-    const data = fs.readFileSync('company-info.json', 'utf8');
-    companyInfo = JSON.parse(data);
-    console.log('✅ Company info caricato:', Object.keys(companyInfo));
+    const companyInfoPath = path.join(__dirname, 'company-info.json');
+    console.log('Tentativo caricamento company-info da:', companyInfoPath);
+    
+    if (fs.existsSync(companyInfoPath)) {
+      const data = fs.readFileSync(companyInfoPath, 'utf8');
+      companyInfo = JSON.parse(data);
+      console.log('✅ Company info caricato:', Object.keys(companyInfo));
+    } else {
+      console.log('⚠️ File company-info.json non trovato, uso defaults');
+      companyInfo = getDefaultCompanyInfo();
+    }
     return companyInfo;
   } catch (error) {
     console.error('❌ Errore caricamento company-info.json:', error);
@@ -95,7 +150,6 @@ function getDefaultCompanyInfo() {
   };
 }
 
-// Carica i dati all'avvio
 loadCompanyInfo();
 
 // ==================== SESSION MANAGEMENT CON CHAT COUNTER ====================
@@ -110,14 +164,14 @@ function getOrCreateSession(req) {
       createdAt: new Date(),
       tokenCount: 0,
       flowCount: 0,
-      chatCount: 0, // Contatore chat
+      chatCount: 0,
       conversationHistory: [],
       currentFlow: null,
       flowData: {},
       isExpired: false,
       lastActivity: new Date(),
-      totalCost: 0, // Costo totale sessione
-      currentChatCost: 0 // Costo chat corrente
+      totalCost: 0,
+      currentChatCost: 0
     });
     console.log(`📝 Nuova sessione creata: ${sessionId}`);
   }
@@ -125,7 +179,6 @@ function getOrCreateSession(req) {
   const session = sessions.get(sessionId);
   session.lastActivity = new Date();
   
-  // Check session timeout
   const timeoutMs = (parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 45) * 60 * 1000;
   if (Date.now() - session.createdAt.getTime() > timeoutMs) {
     session.isExpired = true;
@@ -140,7 +193,6 @@ function checkSessionLimits(session) {
   const maxChats = parseInt(process.env.MAX_CHATS_PER_SESSION) || 3;
   const maxCostPerChat = parseFloat(process.env.MAX_COST_PER_CHAT) || 0.05;
   
-  // Calcola costo attuale chat
   const currentChatCost = session.currentChatCost || 0;
   
   return {
@@ -155,7 +207,6 @@ function checkSessionLimits(session) {
   };
 }
 
-// ==================== COST CALCULATION ====================
 function calculateCost(inputTokens, outputTokens) {
   const inputCost = parseFloat(process.env.INPUT_TOKEN_COST) || 0.00015;
   const outputCost = parseFloat(process.env.OUTPUT_TOKEN_COST) || 0.0006;
@@ -163,12 +214,8 @@ function calculateCost(inputTokens, outputTokens) {
   return (inputTokens * inputCost / 1000) + (outputTokens * outputCost / 1000);
 }
 
-// ==================== RESET CHAT FUNCTION ====================
 function resetCurrentChat(session) {
-  // Incrementa contatore chat
   session.chatCount += 1;
-  
-  // Reset parametri chat
   session.currentChatCost = 0;
   session.conversationHistory = [];
   session.currentFlow = null;
@@ -183,7 +230,6 @@ function resetCurrentChat(session) {
 function generateOptimizedSystemPrompt(session, companyInfo) {
   const studio = companyInfo.studio || {};
   
-  // Prompt più conciso per risparmiare token
   return `Sei l'assistente di ${studio.nome || 'Studio Dentistico Demo'}.
 
 DATI STUDIO:
@@ -207,12 +253,10 @@ Rispondi in italiano, professionale ma amichevole.`;
 function detectFlowIntent(message, session) {
   const msg = message.toLowerCase();
   
-  // Se già in un flow, continua quello
   if (session.currentFlow) {
     return { continue: true, flow: session.currentFlow };
   }
   
-  // Detect new flow intents
   if (msg.includes('prenotare') || msg.includes('appuntamento') || msg.includes('prenotazione')) {
     return { start: true, flow: 'appointment' };
   }
@@ -224,7 +268,6 @@ function detectFlowIntent(message, session) {
   return { continue: false, flow: null };
 }
 
-// ==================== FLOW COMPLETION CHECKER ====================
 function checkFlowCompletion(session) {
   if (!session.currentFlow) return { complete: false };
   
@@ -244,28 +287,23 @@ function checkFlowCompletion(session) {
   };
 }
 
-// ==================== FLOW DATA EXTRACTION ====================
 function extractFlowData(message, flowType) {
   const extractedData = {};
   
-  // Simple extraction patterns
   const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/;
   const phoneRegex = /(\+39|0)?[\s]?([0-9]{2,3})[\s]?([0-9]{6,7}|[0-9]{3}[\s]?[0-9]{3,4})/;
   const nameRegex = /^[a-zA-ZÀ-ÿ\s]{2,30}$/;
   
-  // Extract email
   const emailMatch = message.match(emailRegex);
   if (emailMatch) {
     extractedData.email = emailMatch[0];
   }
   
-  // Extract phone
   const phoneMatch = message.match(phoneRegex);
   if (phoneMatch) {
     extractedData.telefono = phoneMatch[0].replace(/\s/g, '');
   }
   
-  // Extract name (if message is likely a name)
   if (nameRegex.test(message.trim()) && message.trim().length >= 2) {
     const lowerMsg = message.toLowerCase();
     if (!lowerMsg.includes('vorrei') && !lowerMsg.includes('voglio') && !lowerMsg.includes('mi serve')) {
@@ -277,7 +315,7 @@ function extractFlowData(message, flowType) {
 }
 
 // ==================== EMAIL TRANSPORTER ====================
-const transporter = nodemailer.createTransport({
+const transporter = nodemailer.createTransporter({
   host: process.env.SMTP_HOST,
   port: process.env.SMTP_PORT || 587,
   secure: false,
@@ -287,7 +325,6 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// ==================== EMAIL SENDING ====================
 async function sendFlowCompletionEmail(flowType, flowData) {
   try {
     const studio = companyInfo.studio || {};
@@ -357,6 +394,27 @@ ${studio.nome || 'Studio Dentistico Demo'}
 
 // ==================== API ENDPOINTS ====================
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  console.log('🔍 Health check richiesto');
+  res.json({ 
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    port: port,
+    host: req.get('host'),
+    path: req.path,
+    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    maxTokensPerSession: process.env.MAX_TOKENS_PER_SESSION || 8000,
+    maxChatsPerSession: process.env.MAX_CHATS_PER_SESSION || 3,
+    maxFlowsPerSession: process.env.MAX_FLOWS_PER_SESSION || 5,
+    activeSessions: sessions.size,
+    companyInfoLoaded: Object.keys(companyInfo).length > 0,
+    emailConfigured: !!(process.env.SMTP_USER && process.env.SMTP_PASS),
+    openaiConfigured: !!process.env.OPENAI_API_KEY
+  });
+});
+
 // Company info endpoint
 app.get('/api/company-info', (req, res) => {
   try {
@@ -413,22 +471,6 @@ app.get('/api/session-info', (req, res) => {
       maxTokens: 8000
     });
   }
-});
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-    maxTokensPerSession: process.env.MAX_TOKENS_PER_SESSION || 8000,
-    maxChatsPerSession: process.env.MAX_CHATS_PER_SESSION || 3,
-    maxFlowsPerSession: process.env.MAX_FLOWS_PER_SESSION || 5,
-    activeSessions: sessions.size,
-    companyInfoLoaded: Object.keys(companyInfo).length > 0,
-    emailConfigured: !!(process.env.SMTP_USER && process.env.SMTP_PASS),
-    openaiConfigured: !!process.env.OPENAI_API_KEY
-  });
 });
 
 // GDPR consent endpoint
@@ -494,7 +536,6 @@ app.post('/api/chat', async (req, res) => {
   try {
     const { message, forceNewSession = false } = req.body;
     
-    // Reset session if requested
     if (forceNewSession) {
       const sessionId = req.headers['x-session-id'] || 'default';
       const oldSession = sessions.get(sessionId);
@@ -505,7 +546,6 @@ app.post('/api/chat', async (req, res) => {
     
     const session = getOrCreateSession(req);
     
-    // Inizializza costo chat corrente se non esiste
     if (session.currentChatCost === undefined) {
       session.currentChatCost = 0;
     }
@@ -515,7 +555,6 @@ app.post('/api/chat', async (req, res) => {
     console.log(`💬 [${session.id}] Chat ${session.chatCount + 1}/3 - Messaggio: "${message.substring(0, 50)}..."`);
     console.log(`💰 [${session.id}] Costo chat: $${limits.currentChatCost.toFixed(4)}, Chat rimanenti: ${limits.remainingChats}`);
     
-    // Se OpenAI non è configurato
     if (!openai) {
       return res.json({
         response: "🤖 Servizio AI non configurato. Contatta l'amministratore.",
@@ -523,7 +562,6 @@ app.post('/api/chat', async (req, res) => {
       });
     }
     
-    // Check limits
     if (limits.chatLimitReached) {
       return res.json({
         response: `🚫 <strong>Limite raggiunto!</strong><br>
@@ -536,7 +574,6 @@ app.post('/api/chat', async (req, res) => {
     }
     
     if (limits.costLimitReached) {
-      // Avvia nuova chat automaticamente
       resetCurrentChat(session);
       
       if (session.chatCount >= 3) {
@@ -562,29 +599,24 @@ app.post('/api/chat', async (req, res) => {
       });
     }
     
-    // Detect flow intent
     const flowIntent = detectFlowIntent(message, session);
     
-    // Start new flow if detected
     if (flowIntent.start) {
       session.currentFlow = flowIntent.flow;
       session.flowData = {};
       console.log(`🔄 [${session.id}] Avviato flow: ${flowIntent.flow}`);
     }
     
-    // Generate system prompt
     const systemPrompt = generateOptimizedSystemPrompt(session, companyInfo);
     
-    // Prepare conversation history
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...session.conversationHistory.slice(-6), // Meno storia per risparmiare
+      ...session.conversationHistory.slice(-6),
       { role: 'user', content: message }
     ];
     
     console.log(`🤖 [${session.id}] Chiamata GPT-4o-mini...`);
     
-    // Call ChatGPT
     const completion = await openai.chat.completions.create({
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
       messages: messages,
@@ -597,26 +629,22 @@ app.post('/api/chat', async (req, res) => {
     const outputTokens = completion.usage.completion_tokens;
     const totalTokens = completion.usage.total_tokens;
     
-    // Calcola costo preciso
     const costThisCall = calculateCost(inputTokens, outputTokens);
     session.currentChatCost += costThisCall;
     session.totalCost += costThisCall;
     
     console.log(`✅ [${session.id}] Risposta GPT-4o-mini (${totalTokens} token, $${costThisCall.toFixed(4)})`);
     
-    // Update conversation history
     session.conversationHistory.push(
       { role: 'user', content: message },
       { role: 'assistant', content: response }
     );
     session.tokenCount += totalTokens;
     
-    // Keep history shorter for cost efficiency
     if (session.conversationHistory.length > 12) {
       session.conversationHistory = session.conversationHistory.slice(-12);
     }
     
-    // Flow handling
     if (session.currentFlow) {
       const extractedData = extractFlowData(message, session.currentFlow);
       if (extractedData) {
@@ -662,19 +690,46 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// ==================== STATIC FILES ====================
+// ==================== ROOT ROUTES PER ENTRAMBI I DOMINI ====================
+app.get('/studio-dentistico-demo', (req, res) => {
+  console.log('🏠 Root studio-dentistico-demo richiesto');
+  const indexPath = path.join(__dirname, 'index.html');
+  
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send('index.html not found');
+  }
+});
+
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  console.log('🏠 Root richiesto');
+  const host = req.get('host');
+  
+  // Se è assistente-digitale.it redirect a /studio-dentistico-demo/
+  if (host === 'assistente-digitale.it') {
+    return res.redirect(301, '/studio-dentistico-demo/');
+  }
+  
+  // Altrimenti servi index.html normalmente
+  const indexPath = path.join(__dirname, 'index.html');
+  
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send('index.html not found');
+  }
 });
 
 // ==================== ERROR HANDLERS ====================
 app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint non trovato' });
+  console.log(`❌ 404 - Path non trovato: ${req.path}`);
+  res.status(404).json({ error: 'Path not found', path: req.path });
 });
 
 app.use((error, req, res, next) => {
   console.error('❌ Errore server:', error);
-  res.status(500).json({ error: 'Errore interno del server' });
+  res.status(500).json({ error: 'Internal server error', message: error.message });
 });
 
 // ==================== SESSION CLEANUP ====================
@@ -695,7 +750,8 @@ app.listen(port, '0.0.0.0', () => {
   console.log('🚀 ===================================');
   console.log(`🚀 ASSISTENTE DIGITALE AVVIATO`);
   console.log('🚀 ===================================');
-  console.log(`🌐 URL: ${process.env.NODE_ENV === 'production' ? 'https://assistente-digitale.it/studio-dentistico-demo' : `http://localhost:${port}`}`);
+  console.log(`🌐 Render URL: https://assistente-digitale-studio-dentistico.onrender.com`);
+  console.log(`🌐 Custom URL: https://assistente-digitale.it/studio-dentistico-demo/`);
   console.log(`🤖 Modello: ${process.env.OPENAI_MODEL || 'gpt-4o-mini'}`);
   console.log(`📊 Token/sessione: ${process.env.MAX_TOKENS_PER_SESSION || 8000}`);
   console.log(`💬 Chat/sessione: ${process.env.MAX_CHATS_PER_SESSION || 3}`);
@@ -706,7 +762,6 @@ app.listen(port, '0.0.0.0', () => {
   console.log('🚀 ===================================');
 });
 
-// Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('🛑 Server in chiusura...');
   process.exit(0);
