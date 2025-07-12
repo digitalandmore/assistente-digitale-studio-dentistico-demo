@@ -9,7 +9,13 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://assistente-digitale-studio-dentistico.onrender.com'
+  ],
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.static('.')); // Serve static files from current directory
 
@@ -305,12 +311,11 @@ app.use((error, req, res, next) => {
 });
 
 // Start server
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   console.log('🚀 ===================================');
   console.log(`🚀 SERVER ASSISTENTE DIGITALE AVVIATO`);
   console.log('🚀 ===================================');
-  console.log(`🌐 URL: http://localhost:${port}`);
-  console.log(`🤖 Modello OpenAI: ${process.env.OPENAI_MODEL}`);
+  console.log(`🌐 URL: ${process.env.NODE_ENV === 'production' ? 'https://assistente-digitale-studio-dentistico.onrender.com' : `http://localhost:${port}`}`);  console.log(`🤖 Modello OpenAI: ${process.env.OPENAI_MODEL}`);
   console.log(`🎯 Max token per sessione: ${process.env.MAX_TOKENS_PER_SESSION}`);
   console.log(`📊 Max flussi per sessione: ${process.env.MAX_FLOWS_PER_SESSION}`);
   console.log(`⏰ Timeout sessione: ${process.env.SESSION_TIMEOUT_MINUTES} minuti`);

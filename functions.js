@@ -1,3 +1,8 @@
+// ==================== API CONFIGURATION ====================
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:3000' 
+  : 'https://assistente-digitale-studio-dentistico.onrender.com';
+
 // ==================== PAGINATION INTEGRATION ====================
 function initializeMessagePagination() {
   messageHistory = [];
@@ -566,7 +571,7 @@ async function sendEmailNotification(type, data) {
       to: 'digitalandmoreit@gmail.com'
     };
     
-    await fetch('/api/send-email', {
+    await fetch(`${API_BASE_URL}/api/send-email`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
