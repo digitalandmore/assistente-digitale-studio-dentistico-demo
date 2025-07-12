@@ -40,71 +40,70 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-function getDefaultStudioInfo() {
-  return {
-    studio: {
-      nome: 'Studio Dentistico Demo',
-      descrizione: 'Studio dentistico moderno con tecnologie all\'avanguardia',
-      indirizzo: 'Via Demo 123, Milano (MI)',
-      telefono: '+39 123 456 7890',
-      email: 'info@studiodemo.it'
-    },
-    orari: {
-      lunedi_venerdi: '09:00 - 18:00',
-      sabato: '09:00 - 13:00',
-      domenica: 'Chiuso',
-      note: 'Per verificare aperture e chiusure durante festività, consulta la sezione "Orari dello Studio".'
-    },
-    contatti: {
-      telefono: { numero: '+39 123 456 7890' },
-      email: { indirizzo: 'info@studiodemo.it' }
-    },
-    servizi: {
-      igiene: { nome: 'Igiene Orale', descrizione: 'Prevenzione e detartrasi per mantenere denti e gengive sani' },
-      implantologia: { nome: 'Implantologia', descrizione: 'Sostituzione di denti mancanti con impianti sicuri e duraturi' },
-      ortodonzia: { nome: 'Ortodonzia', descrizione: 'Apparecchi per l\'allineamento dentale in adulti e bambini' },
-      estetica: { nome: 'Estetica Dentale', descrizione: 'Trattamenti per migliorare il sorriso: sbiancamento, faccette e altro' },
-      endodonzia: { nome: 'Endodonzia', descrizione: 'Terapia canalare avanzata per salvare denti compromessi' },
-      parodontologia: { nome: 'Parodontologia', descrizione: 'Diagnosi e cura di gengiviti, parodontiti e patologie gengivali' }
-    },
-    offerte: {
-      prima_visita: {
-        nome: 'Prima Visita + Igiene',
-        descrizione: 'Visita completa con pulizia professionale',
-        prezzo_speciale: '89',
-        prezzo_originale: '150',
-        scadenza: '31/12/2024',
-        attiva: true,
-        colore: '#ff6b6b'
-      },
-      sbiancamento: {
-        nome: 'Sbiancamento Professionale',
-        descrizione: 'Trattamento sbiancante avanzato',
-        prezzo_speciale: '199',
-        prezzo_originale: '350',
-        scadenza: '31/12/2024',
-        attiva: true,
-        colore: '#74b9ff'
-      },
-      controllo: {
-        nome: 'Controllo + Panoramica',
-        descrizione: 'Visita di controllo con radiografia',
-        prezzo_speciale: '49',
-        prezzo_originale: '120',
-        scadenza: '31/12/2024',
-        attiva: true,
-        colore: '#00b894'
+async function showWelcomeMessage() {
+  const studioNome = studioInfo.studio?.nome || 'Studio Dentistico Demo';
+  const welcomeMsg = `👋 Ciao! Sono l'assistente digitale di ${studioNome}. Come posso aiutarti oggi?`;
+  await appendMessage('bot', welcomeMsg);
+  
+  setTimeout(showInitialOptions, 2000);
+}
+
+async function showInitialOptions() {
+  const initialOptions = `
+    <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+      <button class="chat-option-btn" onclick="handleQuickOption('info')">📋 Informazioni Studio</button>
+      <button class="chat-option-btn" onclick="handleQuickOption('orari')">⏰ Orari e Disponibilità</button>
+      <button class="chat-option-btn" onclick="handleQuickOption('prenotazione')">📅 Prenota Visita</button>
+      <button class="chat-option-btn" onclick="handleQuickOption('offerte')">🎁 Offerte Speciali</button>
+      <button class="chat-option-btn" onclick="handleQuickOption('contatti')">📞 Contatti</button>
+    </div>
+  `;
+  
+  await appendMessage('bot', initialOptions);
+  
+  // Setup button listeners
+  setTimeout(() => {
+    document.querySelectorAll('.chat-option-btn').forEach(btn => {
+      if (!btn.hasAttribute('data-listener-added')) {
+        btn.setAttribute('data-listener-added', 'true');
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          const action = this.getAttribute('onclick').match(/handleQuickOption\('(.+)'\)/);
+          if (action && action[1]) {
+            handleQuickOption(action[1]);
+          }
+        });
       }
-    },
-    offerte_inclusi: [
-      'Visita specialistica completa',
-      'Consulenza personalizzata',
-      'Piano di trattamento dettagliato'
-    ],
-    festivita_italiane: {},
-    ferie_programmate: {},
-    orari_speciali: {}
+    });
+  }, 100);
+}
+
+async function handleQuickOption(option) {
+  const messages = {
+    'info': 'Dimmi informazioni sullo studio',
+    'orari': 'Quali sono gli orari di apertura?', 
+    'prenotazione': 'Vorrei prenotare una visita',
+    'offerte': 'Dimmi le offerte speciali',
+    'contatti': 'Come posso contattare lo studio?'
   };
+  
+  if (messages[option]) {
+    await appendMessage('user', messages[option]);
+    
+    // Disabilita tutti i pulsanti
+    document.querySelectorAll('.chat-option-btn').forEach(btn => {
+      btn.disabled = true;
+      btn.style.opacity = '0.5';
+      btn.style.cursor = 'not-allowed';
+    });
+    
+    const response = await generateAIResponse(messages[option]);
+    await appendMessage('bot', response);
+    
+    if (response.includes('gdpr-accept-btn')) {
+      setupGDPRButton();
+    }
+  }
 }
 
 // ==================== ORARI E DISPONIBILITÀ ====================
@@ -1227,3 +1226,7 @@ async function sendMessage() {
 window.sendMessage = sendMessage;
 
 console.log('✅ AI Chat System ottimizzato e pronto con supporto offerte');
+
+// chat mobile:
+window.showInitialOptions = showInitialOptions;
+window.handleQuickOption = handleQuickOption;

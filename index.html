@@ -291,13 +291,14 @@
     </div>
   </footer>
 
-    <!-- ==================== JAVASCRIPT ==================== -->
+        <!-- ==================== JAVASCRIPT ==================== -->
   <script>
     // ==================== MOBILE CHAT WIDGET ====================
     let mobileChat = {
       isOpen: false,
       hasNewMessage: false,
-      messageHistory: []
+      messageHistory: [],
+      isInitialized: false
     };
 
     function openMobileChat() {
@@ -310,23 +311,21 @@
         chatMobile.classList.add('active');
         mobileChat.isOpen = true;
         
-        // Nascondi notifica
         if (notification) {
           notification.style.display = 'none';
         }
         
-        // Prevent body scroll
         document.body.style.overflow = 'hidden';
         
-        // Focus su input
         const mobileInput = document.getElementById('mobile-user-input');
         if (mobileInput) {
           setTimeout(() => mobileInput.focus(), 300);
         }
         
-        // Sincronizza messaggi se è la prima apertura
-        if (mobileChat.messageHistory.length === 0) {
+        // Inizializza solo se non è mai stato fatto
+        if (!mobileChat.isInitialized) {
           syncMessagesToMobile();
+          mobileChat.isInitialized = true;
         }
         
         console.log('✅ Chat mobile aperta');
@@ -341,10 +340,7 @@
         overlay.classList.remove('active');
         chatMobile.classList.remove('active');
         mobileChat.isOpen = false;
-        
-        // Restore body scroll
         document.body.style.overflow = '';
-        
         console.log('✅ Chat mobile chiusa');
       }
     }
@@ -356,7 +352,7 @@
       }
     }
 
-    function sendMobileMessage() {
+    async function sendMobileMessage() {
       const mobileInput = document.getElementById('mobile-user-input');
       const message = mobileInput.value.trim();
       
@@ -364,31 +360,87 @@
       
       mobileInput.value = '';
       
-      // Aggiungi messaggio utente alla chat mobile
-      appendMobileMessage('user', message);
+      // Aggiungi messaggio utente
+      await appendMobileMessage('user', message);
       
-      // Chiama la stessa logica del desktop se disponibile
-      if (typeof window.generateAIResponse === 'function') {
-        window.generateAIResponse(message).then(response => {
-          appendMobileMessage('bot', response);
-        });
-      } else if (typeof sendMessage === 'function') {
-        // Fallback usando sendMessage desktop
-        const originalInput = document.getElementById('user-input');
-        if (originalInput) {
-          originalInput.value = message;
-          sendMessage();
-          originalInput.value = '';
+      // Mostra typing indicator
+      showMobileTyping();
+      
+      try {
+        // Attendi che chat.js sia caricato
+        if (typeof window.generateAIResponse === 'function') {
+          const response = await window.generateAIResponse(message);
+          hideMobileTyping();
+          await appendMobileMessage('bot', response);
+          
+          // Setup GDPR button se presente
+          if (response.includes('gdpr-accept-btn') && typeof window.setupGDPRButton === 'function') {
+            window.setupGDPRButton();
+          }
+        } else {
+          // Aspetta che chat.js si carichi
+          let attempts = 0;
+          const waitForChatJS = setInterval(async () => {
+            attempts++;
+            if (typeof window.generateAIResponse === 'function') {
+              clearInterval(waitForChatJS);
+              try {
+                const response = await window.generateAIResponse(message);
+                hideMobileTyping();
+                await appendMobileMessage('bot', response);
+                
+                if (response.includes('gdpr-accept-btn') && typeof window.setupGDPRButton === 'function') {
+                  window.setupGDPRButton();
+                }
+              } catch (error) {
+                hideMobileTyping();
+                await appendMobileMessage('bot', '⚠️ Si è verificato un errore. Riprova più tardi.');
+              }
+            } else if (attempts > 10) {
+              clearInterval(waitForChatJS);
+              hideMobileTyping();
+              await appendMobileMessage('bot', '⚠️ Servizio temporaneamente non disponibile. Riprova più tardi.');
+            }
+          }, 500);
         }
-      } else {
-        // Fallback di emergenza
-        setTimeout(() => {
-          appendMobileMessage('bot', '👋 Ciao! Come posso aiutarti?');
-        }, 1000);
+      } catch (error) {
+        console.error('Errore invio messaggio mobile:', error);
+        hideMobileTyping();
+        await appendMobileMessage('bot', '⚠️ Si è verificato un errore. Riprova più tardi.');
       }
     }
 
-    function appendMobileMessage(type, message) {
+    function showMobileTyping() {
+      const chatBody = document.getElementById('chat-mobile-body');
+      if (!chatBody) return;
+      
+      // Rimuovi eventuali typing indicator esistenti
+      const existingTyping = document.getElementById('mobile-typing-indicator');
+      if (existingTyping) {
+        existingTyping.remove();
+      }
+      
+      const typingDiv = document.createElement('div');
+      typingDiv.className = 'message bot typing-indicator';
+      typingDiv.id = 'mobile-typing-indicator';
+      typingDiv.innerHTML = `
+        <div class="typing-animation">
+          <span></span><span></span><span></span>
+        </div>
+      `;
+      
+      chatBody.appendChild(typingDiv);
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+
+    function hideMobileTyping() {
+      const typingIndicator = document.getElementById('mobile-typing-indicator');
+      if (typingIndicator) {
+        typingIndicator.remove();
+      }
+    }
+
+    async function appendMobileMessage(type, message) {
       const chatBody = document.getElementById('chat-mobile-body');
       if (!chatBody) return;
       
@@ -399,18 +451,17 @@
       chatBody.appendChild(messageDiv);
       chatBody.scrollTop = chatBody.scrollHeight;
       
-      // Salva nella history
       mobileChat.messageHistory.push({ type, message });
       
       console.log(`📱 Messaggio ${type} aggiunto alla chat mobile`);
     }
 
-    function syncMessagesToMobile() {
+    async function syncMessagesToMobile() {
       const desktopChatBody = document.getElementById('chat-body');
       const mobileChatBody = document.getElementById('chat-mobile-body');
       
-      if (desktopChatBody && mobileChatBody) {
-        // Copia tutti i messaggi dal desktop al mobile
+      if (desktopChatBody && mobileChatBody && desktopChatBody.children.length > 0) {
+        // Se ci sono messaggi desktop, copiali
         const messages = desktopChatBody.querySelectorAll('.message');
         
         mobileChatBody.innerHTML = '';
@@ -423,18 +474,40 @@
         mobileChatBody.scrollTop = mobileChatBody.scrollHeight;
         console.log('✅ Messaggi sincronizzati con chat mobile');
       } else {
-        // Se non ci sono messaggi desktop, aggiungi messaggio di benvenuto con pulsanti
-        const welcomeMessage = `
-          👋 Ciao! Sono l'assistente digitale dello studio. Come posso aiutarti?
-          <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-            <button class="chat-option-btn" onclick="selectChatOption('info')">📋 Informazioni Studio</button>
-            <button class="chat-option-btn" onclick="selectChatOption('orari')">⏰ Orari e Disponibilità</button>
-            <button class="chat-option-btn" onclick="selectChatOption('prenotazione')">📅 Prenota Visita</button>
-            <button class="chat-option-btn" onclick="selectChatOption('contatti')">📞 Contatti</button>
-          </div>
-        `;
-        appendMobileMessage('bot', welcomeMessage);
+        // Messaggio di benvenuto semplice
+        const studioNome = document.getElementById('studio-name')?.textContent || 'Studio Dentistico Demo';
+        const welcomeMsg = `👋 Ciao! Sono l'assistente digitale di ${studioNome}. Come posso aiutarti oggi?`;
+        
+        await appendMobileMessage('bot', welcomeMsg);
+        
+        // Aspetta 2 secondi e mostra i pulsanti
+        setTimeout(() => {
+          if (typeof window.showInitialOptions === 'function') {
+            try {
+              // La funzione showInitialOptions aggiungerà i pulsanti automaticamente
+              window.showInitialOptions();
+            } catch (error) {
+              console.error('Errore showInitialOptions:', error);
+              showFallbackButtons();
+            }
+          } else {
+            console.log('showInitialOptions non disponibile, uso fallback');
+            showFallbackButtons();
+          }
+        }, 2000);
       }
+    }
+
+    function showFallbackButtons() {
+      const welcomeMessage = `
+        <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+          <button class="chat-option-btn" onclick="selectChatOption('info')">📋 Informazioni Studio</button>
+          <button class="chat-option-btn" onclick="selectChatOption('orari')">⏰ Orari e Disponibilità</button>
+          <button class="chat-option-btn" onclick="selectChatOption('prenotazione')">📅 Prenota Visita</button>
+          <button class="chat-option-btn" onclick="selectChatOption('contatti')">📞 Contatti</button>
+        </div>
+      `;
+      appendMobileMessage('bot', welcomeMessage);
     }
 
     function selectChatOption(option) {
@@ -446,34 +519,11 @@
       };
       
       if (options[option]) {
-        // Simula il click dell'utente
-        appendMobileMessage('user', options[option]);
-        
-        // Invia il messaggio tramite la logica esistente
-        if (typeof window.generateAIResponse === 'function') {
-          window.generateAIResponse(options[option]).then(response => {
-            appendMobileMessage('bot', response);
-          });
-        } else {
-          // Fallback con risposte predefinite
-          setTimeout(() => {
-            let response = '';
-            switch(option) {
-              case 'info':
-                response = '🏥 Il nostro studio offre servizi di odontoiatria generale e specialistica. Siamo operativi dal 2010 con personale qualificato e attrezzature moderne.';
-                break;
-              case 'orari':
-                response = '⏰ I nostri orari sono:<br>• Lunedì-Venerdì: 9:00-18:00<br>• Sabato: 9:00-13:00<br>• Domenica: Chiuso';
-                break;
-              case 'prenotazione':
-                response = '📅 Per prenotare una visita puoi chiamarci al <strong>123-456-7890</strong> o inviarci una richiesta. Ti ricontatteremo entro 24 ore!';
-                break;
-              case 'contatti':
-                response = '📞 Puoi contattarci:<br>• <strong>Tel:</strong> 123-456-7890<br>• <strong>Email:</strong> info@studiodemo.it<br>• <strong>WhatsApp:</strong> 123-456-7890';
-                break;
-            }
-            appendMobileMessage('bot', response);
-          }, 1000);
+        // Simula input utente e invia tramite sendMobileMessage
+        const mobileInput = document.getElementById('mobile-user-input');
+        if (mobileInput) {
+          mobileInput.value = options[option];
+          sendMobileMessage();
         }
       }
     }
@@ -510,13 +560,8 @@
       if (overlay && popup) {
         overlay.style.display = 'block';
         popup.style.display = 'block';
-        
-        // Focus management per accessibilità
         popup.focus();
-        
-        // Prevent body scroll
         document.body.style.overflow = 'hidden';
-        
         console.log(`✅ Popup ${popupId} aperto`);
       }
     }
@@ -528,29 +573,22 @@
       if (overlay && popup) {
         overlay.style.display = 'none';
         popup.style.display = 'none';
-        
-        // Restore body scroll
         document.body.style.overflow = '';
-        
         console.log(`✅ Popup ${popupId} chiuso`);
       }
     }
 
     function closeAllPopups() {
-      // Nascondi tutti i popup
       document.querySelectorAll('.info-popup').forEach(popup => {
         popup.style.display = 'none';
       });
       
-      // Nascondi overlay
       const overlay = document.getElementById('overlay-bg');
       if (overlay) {
         overlay.style.display = 'none';
       }
       
-      // Restore body scroll
       document.body.style.overflow = '';
-      
       console.log('✅ Tutti i popup chiusi');
     }
 
@@ -560,10 +598,7 @@
       if (mainImg && imgElement) {
         mainImg.src = imgElement.src;
         mainImg.alt = imgElement.alt;
-        
-        // Aggiorna focus per accessibilità
         mainImg.focus();
-        
         console.log('✅ Immagine gallery aggiornata');
       }
     }
@@ -583,36 +618,17 @@
       }
     }
 
-    // Placeholder per sendMessage - verrà implementata in chat.js
     function sendMessage() {
       console.log('📧 Invio messaggio desktop...');
       // Implementazione in chat.js
     }
 
-    // ==================== SYNC DESKTOP TO MOBILE ====================
-    function syncDesktopToMobile(userMessage, botResponse) {
-      // Funzione chiamata da chat.js per sincronizzare i messaggi
-      if (mobileChat.isOpen || window.innerWidth <= 768) {
-        if (userMessage) {
-          appendMobileMessage('user', userMessage);
-        }
-        if (botResponse) {
-          appendMobileMessage('bot', botResponse);
-        }
-      }
-    }
-
-    // Rende la funzione disponibile globalmente per chat.js
-    window.syncDesktopToMobile = syncDesktopToMobile;
-
     // ==================== EVENT LISTENERS ====================
     document.addEventListener('DOMContentLoaded', function() {
       console.log('🚀 DOM caricato, inizializzazione...');
       
-      // Inizializza chat detection
       detectMobileChat();
       
-      // Gestione chiusura popup con overlay
       const overlay = document.getElementById('overlay-bg');
       if (overlay) {
         overlay.addEventListener('click', function(e) {
@@ -622,7 +638,6 @@
         });
       }
       
-      // Gestione chiusura popup/chat con ESC
       document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
           closeAllPopups();
@@ -632,18 +647,15 @@
         }
       });
 
-      // Focus management per accessibilità
       document.querySelectorAll('.info-popup').forEach(popup => {
         popup.setAttribute('tabindex', '-1');
       });
 
-      // Auto focus su input chat desktop
       const chatInput = document.getElementById('user-input');
       if (chatInput && window.innerWidth > 768) {
         setTimeout(() => chatInput.focus(), 500);
       }
 
-      // Mostra notifica mobile dopo 3 secondi
       if (window.innerWidth <= 768) {
         setTimeout(showMobileNotification, 3000);
       }
@@ -651,71 +663,49 @@
       console.log('✅ Event listeners inizializzati');
     });
 
-    // Rileva cambio orientamento/resize
     window.addEventListener('resize', function() {
       detectMobileChat();
-      
-      // Reset mobile chat se si passa a desktop
       if (window.innerWidth > 768 && mobileChat.isOpen) {
         closeMobileChat();
       }
     });
     
     window.addEventListener('orientationchange', function() {
-      setTimeout(detectMobileChat, 100); // Delay per iOS
+      setTimeout(detectMobileChat, 100);
     });
 
-    // ==================== ERROR HANDLING ====================
     window.addEventListener('error', function(e) {
       console.error('❌ Errore JavaScript:', e.error);
-      
-      // Mostra errore in chat mobile se aperta
       if (mobileChat.isOpen) {
         appendMobileMessage('bot', '⚠️ Si è verificato un errore. Riprova più tardi.');
       }
     });
 
-    // ==================== PERFORMANCE MONITORING ====================
     window.addEventListener('load', function() {
       console.log('⚡ Pagina completamente caricata');
-      
-      // Performance timing
       if (window.performance && window.performance.timing) {
         const loadTime = window.performance.timing.loadEventEnd - window.performance.timing.navigationStart;
         console.log(`📊 Tempo di caricamento: ${loadTime}ms`);
-        
-        // Ottimizzazione: se il caricamento è lento, mostra notifica
-        if (loadTime > 3000) {
-          console.warn('⚠️ Caricamento lento rilevato');
-        }
       }
     });
 
-    // ==================== VISIBILITY API ====================
     document.addEventListener('visibilitychange', function() {
-      if (document.hidden) {
-        console.log('👁️ Pagina nascosta');
-        // Pausa eventuali animazioni o timer
-      } else {
-        console.log('👁️ Pagina visibile');
-        // Riprendi animazioni
-        if (window.innerWidth <= 768 && !mobileChat.isOpen) {
-          showMobileNotification();
-        }
+      if (!document.hidden && window.innerWidth <= 768 && !mobileChat.isOpen) {
+        showMobileNotification();
       }
     });
 
     // ==================== GLOBAL FUNCTIONS ====================
-    // Funzioni globali per integrazione con altri script
     window.mobileChat = mobileChat;
     window.openMobileChat = openMobileChat;
     window.closeMobileChat = closeMobileChat;
     window.appendMobileMessage = appendMobileMessage;
     window.selectChatOption = selectChatOption;
+    window.showMobileTyping = showMobileTyping;
+    window.hideMobileTyping = hideMobileTyping;
   </script>
   
   <!-- ==================== EXTERNAL SCRIPTS ==================== -->
-  <!-- Scripts caricati in ordine di dipendenza -->
   <script src="functions.js"></script>
   <script src="ui-manager.js"></script>
   <script src="chat.js"></script>
@@ -753,25 +743,13 @@
             "name": "Igiene Orale",
             "description": "Pulizia dentale professionale"
           }
-        },
-        {
-          "@type": "Offer",
-          "itemOffered": {
-            "@type": "Service",
-            "name": "Odontoiatria Conservativa",
-            "description": "Trattamento carie e restauri"
-          }
         }
       ]
-    },
-    "sameAs": [
-      "https://www.facebook.com/studiodemo",
-      "https://www.instagram.com/studiodemo"
-    ]
+    }
   }
   </script>
 
-  <!-- ==================== CSS CHAT OPTION BUTTONS ==================== -->
+  <!-- ==================== CSS TYPING ANIMATION ==================== -->
   <style>
     .chat-option-btn {
       background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
@@ -793,8 +771,38 @@
       box-shadow: 0 4px 12px rgba(0, 119, 204, 0.3);
     }
     
-    .chat-option-btn:active {
-      transform: translateY(0);
+    .typing-indicator {
+      opacity: 0.7;
+    }
+    
+    .typing-animation {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 0;
+    }
+    
+    .typing-animation span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--primary-color);
+      animation: typing 1.4s infinite ease-in-out both;
+    }
+    
+    .typing-animation span:nth-child(1) { animation-delay: -0.32s; }
+    .typing-animation span:nth-child(2) { animation-delay: -0.16s; }
+    .typing-animation span:nth-child(3) { animation-delay: 0s; }
+    
+    @keyframes typing {
+      0%, 80%, 100% {
+        transform: scale(0.8);
+        opacity: 0.5;
+      }
+      40% {
+        transform: scale(1);
+        opacity: 1;
+      }
     }
   </style>
 </body>
