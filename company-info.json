@@ -24,25 +24,19 @@
     "note": "Gli orari potrebbero variare durante le festività. Contattaci per conferme su date specifiche."
   },
   "ferie_programmate": {
-    "ferie_estive": {
-      "tipo": "periodo_fisso",
-      "inizio": {
-        "mese": 8,
-        "giorno": 1
-      },
-      "fine": {
-        "mese": 8,
-        "giorno": 14
-      },
-      "descrizione": "Ferie estive annuali",
-      "nota": "Il 15 agosto (Ferragosto) è sempre chiuso. Riapertura il 16 agosto."
-    },
-    "ferie_natalizie": {
-      "tipo": "periodo_variabile",
-      "descrizione": "Chiusura natalizia dal 24 dicembre al 6 gennaio",
-      "note": "Date specifiche comunicate annualmente"
-    }
+  "ferie_estive": {
+    "inizio": "01-08",
+    "fine": "14-08",
+    "descrizione": "Ferie estive annuali",
+    "nota": "Il 15 agosto (Ferragosto) è sempre chiuso. Riapertura il 16 agosto."
   },
+  "ferie_natalizie": {
+    "inizio": "24-12",
+    "fine": "06-01",
+    "descrizione": "Chiusura natalizia",
+    "nota": "Date specifiche comunicate annualmente"
+  }
+},
   "festivita_italiane": {
     "capodanno": {
       "mese": 1,
