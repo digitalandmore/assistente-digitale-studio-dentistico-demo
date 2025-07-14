@@ -12,7 +12,7 @@ function getBaseURL() {
   
   // Custom domain con subdirectory
   if (hostname === 'assistente-digitale.it') {
-    return 'https://assistente-digitale.it';
+    return 'https://assistente-digitale-studio-dentistico.onrender.com';
   }
   
   // Render domain diretto
